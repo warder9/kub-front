@@ -1,0 +1,1267 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { User } from "@/src/models/users.model";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { CustomSelect } from "@/components/ui/custom-select";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Handshake,
+  Plus,
+  Search,
+  Phone,
+  Mail,
+  Building,
+  Calendar,
+  FileText,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Edit,
+  Trash2,
+  RefreshCw,
+  Eye,
+  ChevronUp,
+  ChevronsUpDown,
+  Check,
+} from "lucide-react";
+import { getCurrentUser, getCurrentCompany } from "@/lib/auth";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import * as ClientAPI from "@/src/api/clients.api"; // Import all as ClientAPI
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+export default function DealsPage() {
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [deals, setDeals] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
+
+  // Dialog states
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+
+  // Current deal states
+  const [currentDeal, setCurrentDeal] = useState<any>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+
+  // Form states
+  const [newDeal, setNewDeal] = useState({
+    lead_id: 0,
+    client_id: 0,
+    owner_id: 0,
+    amount: "",
+    currency: "KZT",
+    status: "new",
+  });
+
+  const [editDeal, setEditDeal] = useState({
+    lead_id: 0,
+    client_id: 0,
+    owner_id: 0,
+    amount: "",
+    currency: "KZT",
+    status: "new",
+  });
+
+  const [statusUpdate, setStatusUpdate] = useState({
+    to: "",
+    comment: "",
+  });
+
+  // ─── Status transition rules ────────────────────────────────
+  const FINAL_STATUSES = ["won", "lost", "cancelled"];
+
+  const allowedTransitions: Record<string, string[]> = {
+    new: ["in_progress", "won", "lost", "cancelled"],
+    in_progress: ["won", "lost", "cancelled"],
+    // won, lost, cancelled are final — no transitions
+  };
+
+  const statusLabelMap: Record<string, string> = {
+    new: "Новая",
+    in_progress: "В работе",
+    won: "Выиграна",
+    lost: "Проиграна",
+    cancelled: "Отменена",
+  };
+
+  const isFinalStatus = (status: string) => FINAL_STATUSES.includes(status);
+
+  const getTransitionOptions = (currentStatus: string) => {
+    const allowed = allowedTransitions[currentStatus] || [];
+    return allowed.map((s) => ({ value: s, label: statusLabelMap[s] || s }));
+  };
+
+  // Pagination & Search params
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const currentPage = Number(searchParams.get('page')) || 1;
+  const limit = 20;
+  const [totalDeals, setTotalDeals] = useState(0);
+
+  const fetchDeals = async () => {
+    setIsLoading(true);
+    try {
+      const { list_deals } = await import("@/src/api/deals.api");
+      const params: any = { page: currentPage, limit };
+      if (searchTerm) params.search = searchTerm;
+      if (statusFilter !== "all") params.status = statusFilter;
+
+      const dealsRes = await list_deals(undefined, params);
+      const dealsData = (dealsRes?.data || (Array.isArray(dealsRes) ? dealsRes : []));
+      const total = dealsRes?.total || dealsData.length;
+
+      setDeals(dealsData);
+      setTotalDeals(total);
+    } catch (err: any) {
+      console.error("Error loading deals:", err);
+      setError(err?.message || "Ошибка при загрузке сделок");
+      toast.error("Ошибка при загрузке сделок");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const ComboboxSelect = ({
+    value,
+    onChange,
+    options,
+    placeholder = "Выберите...",
+    searchPlaceholder = "Поиск...",
+    emptyText = "Ничего не найдено",
+    disabled = false
+  }: {
+    value: string | number;
+    onChange: (value: string) => void;
+    options: { value: string; label: string }[];
+    placeholder?: string;
+    searchPlaceholder?: string;
+    emptyText?: string;
+    disabled?: boolean;
+  }) => {
+    const [open, setOpen] = useState(false);
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn("w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-10 hover:bg-accent hover:text-accent-foreground", !value && "text-muted-foreground")}
+            disabled={disabled}
+          >
+            <span className="truncate">
+              {value
+                ? options.find((option) => option.value === value.toString())?.label
+                : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={searchPlaceholder} />
+            <CommandList>
+              <CommandEmpty>{emptyText}</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.label}
+                    onSelect={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value.toString() === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('page', page.toString());
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Fetch meta data (dictionaries) on component mount
+  useEffect(() => {
+    const loadMeta = async () => {
+      try {
+        const userData = getCurrentUser();
+        const companyData = getCurrentCompany();
+
+        if (!userData || !companyData) {
+          router.push("/auth/login");
+          return;
+        }
+
+        setUser(userData);
+        setCompany(companyData);
+
+        // Load clients (for dropdown)
+        try {
+          const res = userData.role === "admin" || userData.role === "manager"
+            ? await ClientAPI.listClients()
+            : await ClientAPI.listMyClients();
+          const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
+          setClients(Array.isArray(clientsData) ? clientsData : []);
+        } catch (err) {
+          console.error("Error loading clients:", err);
+        }
+
+        // Load leads (for dropdown)
+        try {
+          const { list_leads } = await import("@/src/api/leads.api");
+          const leadsRes = await list_leads();
+          const leadsData = leadsRes?.data || leadsRes || [];
+          setLeads(Array.isArray(leadsData) ? leadsData : []);
+        } catch (err) {
+          console.error("Error loading leads:", err);
+        }
+
+        // Load users (for responsible)
+        try {
+          const { listUsers } = await import("@/src/api/users.api");
+          const res = await listUsers();
+          const usersData = Array.isArray(res) ? res : (res as any)?.data || [];
+          setUsers(Array.isArray(usersData) ? usersData : []);
+        } catch (err) {
+          console.error("Error loading users:", err);
+        }
+
+      } catch (err: any) {
+        console.error("Error loading meta:", err);
+      }
+    };
+
+    loadMeta();
+  }, [router, user?.role]);
+
+  // Fetch deals on params change
+  useEffect(() => {
+    fetchDeals();
+  }, [currentPage, statusFilter]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Only fetch if searchTerm changed (controlled by dep array), and avoid initial double fetch if empty?
+      // Actually initial fetch is handled by useEffect([currentPage...]) if searchTerm is empty.
+      // If searchTerm is not empty, this runs.
+      if (searchTerm !== "") fetchDeals();
+      else fetchDeals(); // Fetch all if search cleared
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset new deal form
+  const resetNewDealForm = () => {
+    setNewDeal({
+      lead_id: 0,
+      client_id: 0,
+      owner_id: user?.id ? parseInt(user.id) : 0,
+      amount: "",
+      currency: "KZT",
+      status: "new",
+    });
+  };
+
+  // Open create dialog
+  const openCreateDialog = () => {
+    resetNewDealForm();
+    setIsCreateDialogOpen(true);
+  };
+
+  // Open edit dialog
+  const openEditDialog = (deal: any) => {
+    setCurrentDeal(deal);
+    setEditDeal({
+      lead_id: deal.lead_id || 0,
+      client_id: deal.client_id || 0,
+      owner_id: deal.owner_id || (user?.id ? parseInt(user.id) : 0),
+      amount: deal.amount?.toString() || "",
+      currency: deal.currency || "KZT",
+      status: deal.status || "new",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  // Open view dialog
+  const openViewDialog = (deal: any) => {
+    setCurrentDeal(deal);
+    setIsViewDialogOpen(true);
+  };
+
+  // Open status update dialog
+  const openStatusDialog = (deal: any) => {
+    setSelectedDealId(deal.id);
+    setCurrentDeal(deal);
+    setStatusUpdate({
+      to: "",
+      comment: "",
+    });
+    setIsStatusDialogOpen(true);
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      new: { label: "Новая", className: "bg-blue-100 text-blue-800" },
+      in_progress: { label: "В работе", className: "bg-yellow-100 text-yellow-800" },
+      won: { label: "Выиграна", className: "bg-green-100 text-green-800" },
+      lost: { label: "Проиграна", className: "bg-red-100 text-red-800" },
+      cancelled: { label: "Отменена", className: "bg-gray-100 text-gray-800" },
+    };
+
+    const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
+    return (
+      <Badge className={`${config.className} text-xs`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  // Get status color for progress
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      new: "bg-blue-500",
+      in_progress: "bg-yellow-500",
+      won: "bg-green-500",
+      lost: "bg-red-500",
+      cancelled: "bg-gray-500",
+    };
+    return colors[status] || "bg-blue-500";
+  };
+
+  // Handle create deal
+  const handleCreateDeal = async () => {
+    try {
+      setIsLoading(true);
+      const { create_deal } = await import("@/src/api/deals.api");
+
+      const payload = {
+        lead_id: newDeal.lead_id ? Number(newDeal.lead_id) : undefined,
+        client_id: Number(newDeal.client_id),
+        owner_id: Number(newDeal.owner_id),
+        amount: Number(newDeal.amount),
+        currency: newDeal.currency || "KZT",
+        status: newDeal.status || "new",
+      };
+
+      const res = await create_deal(payload as any);
+      const createdDeal = res?.data || res;
+
+      setDeals(prev => [createdDeal, ...prev]);
+      resetNewDealForm();
+      toast.success("Сделка успешно создана");
+    } catch (err: any) {
+      console.error("Error creating deal:", err);
+      toast.error(err?.message || "Ошибка при создании сделки");
+    } finally {
+      setIsCreateDialogOpen(false);
+      setIsLoading(false);
+    }
+  };
+
+  // Handle update deal
+  const handleUpdateDeal = async () => {
+    if (!currentDeal?.id) return;
+
+    try {
+      setIsLoading(true);
+      const { update_deal } = await import("@/src/api/deals.api");
+
+      const payload = {
+        lead_id: editDeal.lead_id ? Number(editDeal.lead_id) : undefined,
+        client_id: Number(editDeal.client_id),
+        owner_id: Number(editDeal.owner_id),
+        amount: Number(editDeal.amount),
+        currency: editDeal.currency || "KZT",
+        status: editDeal.status || "new",
+      };
+
+      await update_deal(payload as any, { id: currentDeal.id });
+
+      // Update local state
+      setDeals(prev => prev.map(deal =>
+        deal.id === currentDeal.id
+          ? { ...deal, ...payload }
+          : deal
+      ));
+
+      setCurrentDeal(null);
+      toast.success("Сделка успешно обновлена");
+    } catch (err: any) {
+      console.error("Error updating deal:", err);
+      toast.error(err?.message || "Ошибка при обновлении сделки");
+    } finally {
+      setIsEditDialogOpen(false);
+      setIsLoading(false);
+    }
+  };
+
+  // Handle delete deal
+  const handleDeleteDeal = async (dealId: string) => {
+    try {
+      setIsLoading(true);
+      const { delete_deal } = await import("@/src/api/deals.api");
+
+      await delete_deal(undefined, { id: dealId });
+
+      // Update local state
+      setDeals(prev => prev.filter(deal => deal.id !== dealId));
+      toast.success("Сделка успешно удалена");
+    } catch (err: any) {
+      console.error("Error deleting deal:", err);
+      toast.error(err?.message || "Ошибка при удалении сделки");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle status update
+  const handleStatusUpdate = async () => {
+    if (!selectedDealId || !statusUpdate.to) return;
+
+    try {
+      setIsLoading(true);
+      const { update_deal_status } = await import("@/src/api/deals.api");
+
+      const payload: { to: string; comment?: string } = {
+        to: statusUpdate.to,
+      };
+      if (statusUpdate.comment?.trim()) {
+        payload.comment = statusUpdate.comment.trim();
+      }
+
+      await update_deal_status(payload as any, { id: selectedDealId });
+
+      setSelectedDealId(null);
+      setStatusUpdate({ to: "", comment: "" });
+      toast.success("Статус сделки обновлен");
+
+      // Re-fetch deals to pick up the new status from the server
+      await fetchDeals();
+    } catch (err: any) {
+      console.error("Error updating deal status:", err);
+      toast.error(err?.message || "Ошибка при обновлении статуса");
+    } finally {
+      setIsStatusDialogOpen(false);
+      setIsLoading(false);
+    }
+  };
+
+  // Handle refresh
+  // Handle refresh
+  const handleRefresh = async () => {
+    fetchDeals();
+    // Refresh meta if needed
+    try {
+      const userData = getCurrentUser();
+      if (userData) {
+        const res = userData.role === "admin" || userData.role === "manager"
+          ? await ClientAPI.listClients()
+          : await ClientAPI.listMyClients();
+        const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
+        setClients(Array.isArray(clientsData) ? clientsData : []);
+      }
+      toast.success("Данные обновлены");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Get client name by ID
+  const getClientName = (clientId: number) => {
+    const client = clients.find(c => c.id === clientId);
+    return client ? client.name : `Клиент #${clientId}`;
+  };
+
+  const getUserLabel = (userId: number) => {
+    const u = users.find(user => user.id === userId);
+    return u ? (u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)) : `Пользователь #${userId}`;
+  };
+
+  // Get lead title by ID
+  const getLeadTitle = (leadId: number) => {
+    const lead = leads.find(l => l.id === leadId);
+    return lead ? lead.title : `Лид #${leadId}`;
+  };
+
+  // Filtered deals
+  const filteredDeals = (deals || []).filter((deal) => {
+    const matchesSearch =
+      (deal.amount?.toString() || "").includes(searchTerm) ||
+      getClientName(deal.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getLeadTitle(deal.lead_id).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" || deal.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate statistics
+  // Calculate statistics
+  const stats = {
+    total: totalDeals,
+    totalValue: deals.reduce((sum, deal) => sum + (Number(deal.amount) || 0), 0),
+    active: deals.filter(d => !["won", "lost", "cancelled"].includes(d.status)).length,
+    won: deals.filter(d => d.status === "won").length,
+  };
+
+  if (isLoading && (!deals || deals.length === 0)) {
+    return (
+      <>
+        <Skeleton className="h-8 w-48 mb-4" />
+        <Skeleton className="h-4 w-64 mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <Skeleton className="h-12 mb-6" />
+        <Skeleton className="h-96" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Сделки
+          </h1>
+          <p className="text-gray-600">
+            Управление активными сделками
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Новая сделка
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {stats.total}
+                </div>
+                <p className="text-sm text-gray-600">Всего сделок</p>
+              </div>
+              <Handshake className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-green-600">
+                  {stats.totalValue.toLocaleString()} ₸
+                </div>
+                <p className="text-sm text-gray-600">Общая стоимость</p>
+              </div>
+              <Building className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {stats.active}
+                </div>
+                <p className="text-sm text-gray-600">Активных</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {stats.won}
+                </div>
+                <p className="text-sm text-gray-600">Выиграно</p>
+              </div>
+              <FileText className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Введите сумму, имя клиента..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <CustomSelect
+              value={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="Статус"
+              className="w-full sm:w-48"
+              options={[
+                { value: "all", label: "Все статусы" },
+                { value: "new", label: "Новая" },
+                { value: "in_progress", label: "В работе" },
+                { value: "won", label: "Выиграна" },
+                { value: "lost", label: "Проиграна" },
+                { value: "cancelled", label: "Отменена" },
+              ]}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Deals Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Список сделок</CardTitle>
+          <CardDescription>
+            {deals?.length ? `Найдено ${deals.length} сделок` : "Сделки не найдены"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Клиент</TableHead>
+                  <TableHead>Лид</TableHead>
+                  <TableHead>Сумма</TableHead>
+                  <TableHead>Валюта</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead>Дата создания</TableHead>
+                  <TableHead className="text-right">Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(!deals || deals.length === 0) ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      Нет сделок
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  deals.map((deal) => (
+                    <TableRow key={deal.id}>
+                      <TableCell className="font-medium">#{deal.id}</TableCell>
+                      <TableCell>
+                        {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
+                      </TableCell>
+                      <TableCell>
+                        {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {Number(deal.amount || 0).toLocaleString()}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{deal.currency || "KZT"}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(deal.status)}
+                          <div className="w-24">
+                            <Progress
+                              value={
+                                deal.status === "new" ? 20 :
+                                  deal.status === "in_progress" ? 50 :
+                                    deal.status === "won" ? 100 :
+                                      deal.status === "lost" ? 100 :
+                                        deal.status === "cancelled" ? 100 : 10
+                              }
+                              className={`h-2 ${getStatusColor(deal.status)}`}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {deal.created_at ? (
+                          <div className="flex items-center text-sm">
+                            <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                            {format(new Date(deal.created_at), "dd.MM.yyyy", { locale: ru })}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openViewDialog(deal)}
+                            title="Просмотр"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(deal)}
+                            title="Редактировать"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {!isFinalStatus(deal.status) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openStatusDialog(deal)}
+                              title="Изменить статус"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Удалить"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Вы уверены, что хотите удалить сделку #{deal.id}?
+                                  Это действие нельзя отменить.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteDeal(deal.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Удалить
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+
+        {totalDeals > limit && (
+          <div className="pb-4">
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalDeals / limit)}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
+      </Card >
+
+      {/* Create Deal Dialog */}
+      < Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Создать новую сделку</DialogTitle>
+            <DialogDescription>
+              Заполните информацию о новой сделке
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="lead_id">Лид <span className="text-red-500">*</span></Label>
+              <ComboboxSelect
+                value={newDeal.lead_id?.toString() || ""}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, lead_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите лид"
+                searchPlaceholder="Поиск лида..."
+                emptyText="Лид не найден"
+                options={leads.map((lead) => ({
+                  value: lead.id.toString(),
+                  label: lead.title || `Лид #${lead.id}`
+                }))}
+              />
+              {!newDeal.lead_id && (
+                <p className="text-xs text-red-500">Выберите лид для продолжения</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="client_id">Клиент <span className="text-red-500">*</span></Label>
+              <ComboboxSelect
+                value={newDeal.client_id?.toString() || ""}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, client_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите клиента"
+                searchPlaceholder="Поиск клиента..."
+                emptyText="Клиент не найден"
+                options={clients.map((client) => ({
+                  value: client.id.toString(),
+                  label: client.name || `Клиент #${client.id}`
+                }))}
+              />
+              {!newDeal.client_id && (
+                <p className="text-xs text-red-500">Выберите клиента для продолжения</p>
+              )}
+              {clients.length === 0 && (
+                <p className="text-xs text-amber-600">Сначала создайте клиента в разделе Клиенты</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="owner_id">Ответственный</Label>
+              <ComboboxSelect
+                value={newDeal.owner_id?.toString() || ""}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, owner_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите ответственного"
+                searchPlaceholder="Поиск сотрудника..."
+                options={users.map((u) => ({
+                  value: u.id.toString(),
+                  label: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)
+                }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="amount">Сумма *</Label>
+              <Input
+                id="amount"
+                type="number"
+                placeholder="Введите сумму..."
+                value={newDeal.amount}
+                onChange={(e) =>
+                  setNewDeal({ ...newDeal, amount: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currency">Валюта *</Label>
+              <CustomSelect
+                value={newDeal.currency}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, currency: value })
+                }
+                placeholder="Выберите валюту"
+                options={[
+                  { value: "KZT", label: "Тенге (KZT)" },
+                  { value: "USD", label: "Доллар (USD)" },
+                  { value: "EUR", label: "Евро (EUR)" },
+                  { value: "RUB", label: "Рубль (RUB)" },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Статус *</Label>
+              <CustomSelect
+                value={newDeal.status}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, status: value })
+                }
+                placeholder="Выберите статус"
+                options={[
+                  { value: "new", label: "Новая" },
+                  { value: "draft", label: "Черновик" },
+                  { value: "negotiation", label: "Переговоры" },
+                  { value: "proposal_sent", label: "Предложение отправлено" },
+                  { value: "contract_sent", label: "Договор отправлен" },
+                ]}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">Отмена</Button></DialogClose>
+            <Button onClick={handleCreateDeal} disabled={isLoading || !newDeal.client_id || !newDeal.lead_id}>
+              {isLoading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Создание...
+                </>
+              ) : (
+                "Создать"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog >
+
+      {/* Edit Deal Dialog */}
+      < Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Редактировать сделку #{currentDeal?.id}</DialogTitle>
+            <DialogDescription>
+              Обновите информацию о сделке
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit_lead_id">Лид</Label>
+              <ComboboxSelect
+                value={editDeal.lead_id?.toString() || ""}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, lead_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите лид"
+                searchPlaceholder="Поиск лида..."
+                emptyText="Лид не найден"
+                options={leads.map((lead) => ({
+                  value: lead.id.toString(),
+                  label: lead.title || `Лид #${lead.id}`
+                }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_client_id">Клиент</Label>
+              <ComboboxSelect
+                value={editDeal.client_id?.toString() || ""}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, client_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите клиента"
+                searchPlaceholder="Поиск клиента..."
+                options={clients.map((client) => ({
+                  value: client.id.toString(),
+                  label: client.name || `Клиент #${client.id}`
+                }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_owner_id">Ответственный</Label>
+              <ComboboxSelect
+                value={editDeal.owner_id?.toString() || ""}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, owner_id: parseInt(value) || 0 })
+                }
+                placeholder="Выберите ответственного"
+                searchPlaceholder="Поиск сотрудника..."
+                options={users.map((u) => ({
+                  value: u.id.toString(),
+                  label: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)
+                }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_amount">Сумма *</Label>
+              <Input
+                id="edit_amount"
+                type="number"
+                placeholder="Введите сумму..."
+                value={editDeal.amount}
+                onChange={(e) =>
+                  setEditDeal({ ...editDeal, amount: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_currency">Валюта *</Label>
+              <CustomSelect
+                value={editDeal.currency}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, currency: value })
+                }
+                placeholder="Выберите валюту"
+                options={[
+                  { value: "KZT", label: "Тенге (KZT)" },
+                  { value: "USD", label: "Доллар (USD)" },
+                  { value: "EUR", label: "Евро (EUR)" },
+                  { value: "RUB", label: "Рубль (RUB)" },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_status">Статус *</Label>
+              <CustomSelect
+                value={editDeal.status}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, status: value })
+                }
+                placeholder="Выберите статус"
+                options={[
+                  { value: "new", label: "Новая" },
+                  { value: "in_progress", label: "В работе" },
+                  { value: "won", label: "Выиграна" },
+                  { value: "lost", label: "Проиграна" },
+                  { value: "cancelled", label: "Отменена" },
+                ]}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={handleUpdateDeal} disabled={isLoading}>
+              {isLoading ? "Обновление..." : "Обновить сделку"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog >
+
+      {/* View Deal Dialog */}
+      < Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen} >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Сделка #{currentDeal?.id}</DialogTitle>
+            <DialogDescription>
+              Подробная информация о сделке
+            </DialogDescription>
+          </DialogHeader>
+          {currentDeal && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">ID</Label>
+                  <p className="font-medium">#{currentDeal.id}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Статус</Label>
+                  <div className="mt-1">
+                    {getStatusBadge(currentDeal.status)}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Клиент</Label>
+                  <p className="font-medium">
+                    {currentDeal.client_id ? getClientName(currentDeal.client_id) : "Без клиента"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Лид</Label>
+                  <p className="font-medium">
+                    {currentDeal.lead_id ? getLeadTitle(currentDeal.lead_id) : "Без лида"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Сумма</Label>
+                  <p className="font-medium">
+                    {Number(currentDeal.amount || 0).toLocaleString()} {currentDeal.currency}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Ответственный</Label>
+                  <p className="font-medium">
+                    ID: {currentDeal.owner_id}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Дата создания</Label>
+                  <p className="font-medium">
+                    {currentDeal.created_at ? format(new Date(currentDeal.created_at), "dd.MM.yyyy HH:mm", { locale: ru }) : "-"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Дата обновления</Label>
+                  <p className="font-medium">
+                    {currentDeal.updated_at ? format(new Date(currentDeal.updated_at), "dd.MM.yyyy HH:mm", { locale: ru }) : "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewDialogOpen(false)}>
+              Закрыть
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog >
+
+      {/* Status Update Dialog */}
+      < Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen} >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Изменить статус сделки #{selectedDealId}</DialogTitle>
+            <DialogDescription>
+              Выберите новый статус из доступных переходов
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Current status indicator */}
+            {currentDeal && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 border">
+                <span className="text-sm text-gray-500">Текущий статус:</span>
+                {getStatusBadge(currentDeal.status)}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Новый статус <span className="text-red-500">*</span></Label>
+              {currentDeal && getTransitionOptions(currentDeal.status).length > 0 ? (
+                <CustomSelect
+                  value={statusUpdate.to}
+                  onChange={(value) =>
+                    setStatusUpdate({ ...statusUpdate, to: value })
+                  }
+                  placeholder="Выберите статус"
+                  options={getTransitionOptions(currentDeal.status)}
+                />
+              ) : (
+                <p className="text-sm text-gray-500 italic">Нет доступных переходов для текущего статуса.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="comment">Комментарий (необязательно)</Label>
+              <Textarea
+                id="comment"
+                placeholder="Напишите комментарий..."
+                value={statusUpdate.comment}
+                onChange={(e) =>
+                  setStatusUpdate({ ...statusUpdate, comment: e.target.value })
+                }
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={handleStatusUpdate}
+              disabled={!statusUpdate.to || isLoading}
+            >
+              {isLoading ? "Обновление..." : "Обновить статус"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog >
+    </>
+  );
+}

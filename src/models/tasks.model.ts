@@ -1,0 +1,33 @@
+export type Tasks_Create_task_Request = {
+  title: string
+  description: string
+  entity_id: number
+  entity_type: string
+  assignee_id: number
+  due_date: string
+  priority: string
+}
+
+export type Tasks_Create_task_Response = {
+  id: number
+  title: string
+  status: string
+}
+
+export type Tasks_Update_task_Request = {
+  title: string
+  description: string
+  entity_id: number
+  entity_type: string
+  assignee_id: number
+  due_date: string
+  priority: string
+}
+
+export type Tasks_Change_task_status_Request = {
+  status: string
+}
+
+export type Tasks_Assign_task_Request = {
+  assignee_id: number
+}

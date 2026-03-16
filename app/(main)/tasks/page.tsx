@@ -1,0 +1,1061 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { PaginationControls } from "@/components/ui/pagination-controls"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { CustomSelect } from "@/components/ui/custom-select"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Plus,
+  RefreshCw,
+  Search,
+  ChevronsUpDown,
+  Check,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  UserPlus,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Calendar,
+  ClipboardList,
+  Activity,
+  XCircle,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { ru } from "date-fns/locale"
+import { toast } from "sonner"
+import { getCurrentUser } from "@/lib/auth"
+import {
+  create_task,
+  list_tasks,
+  update_task,
+  delete_task,
+  change_task_status,
+  assign_task,
+  complete_task,
+} from "@/src/api/tasks.api"
+import { listUsers } from "@/src/api/users.api"
+
+// ─── Types & Constants ───────────────────────────────────────────
+
+type TaskStatus = "new" | "in_progress" | "done" | "cancelled"
+type TaskPriority = "low" | "normal" | "high" | "urgent"
+type EntityType = "deal" | "lead"
+
+const statusTransitions: Record<TaskStatus, TaskStatus[]> = {
+  new: ["in_progress", "cancelled"],
+  in_progress: ["done", "cancelled"],
+  done: [],
+  cancelled: [],
+}
+
+const statusLabels: Record<TaskStatus, string> = {
+  new: "Новая",
+  in_progress: "В работе",
+  done: "Выполнена",
+  cancelled: "Отменена",
+}
+
+const statusColors: Record<TaskStatus, string> = {
+  new: "bg-blue-100 text-blue-800",
+  in_progress: "bg-yellow-100 text-yellow-800",
+  done: "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
+}
+
+const priorityLabels: Record<TaskPriority, string> = {
+  low: "Низкий",
+  normal: "Обычный",
+  high: "Высокий",
+  urgent: "Срочный",
+}
+
+const priorityColors: Record<TaskPriority, string> = {
+  low: "bg-gray-100 text-gray-700",
+  normal: "bg-blue-100 text-blue-700",
+  high: "bg-orange-100 text-orange-700",
+  urgent: "bg-red-100 text-red-700",
+}
+
+// ─── Combobox Component ──────────────────────────────────────────
+
+function ComboboxSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Выберите...",
+  searchPlaceholder = "Поиск...",
+  emptyText = "Ничего не найдено",
+  disabled = false,
+}: {
+  value: string | number
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+  placeholder?: string
+  searchPlaceholder?: string
+  emptyText?: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-10 hover:bg-accent hover:text-accent-foreground",
+            !value && "text-muted-foreground"
+          )}
+          disabled={disabled}
+        >
+          <span className="truncate">
+            {value
+              ? options.find((o) => o.value === value.toString())?.label || placeholder
+              : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => {
+                    onChange(option.value)
+                    setOpen(false)
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value?.toString() === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ─── Main Page ───────────────────────────────────────────────────
+
+export default function TasksPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+
+  const [tasks, setTasks] = useState<any[]>([])
+  const [totalTasks, setTotalTasks] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const [users, setUsers] = useState<any[]>([])
+  const [deals, setDeals] = useState<any[]>([])
+  const [leads, setLeads] = useState<any[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  // Dialog states
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<any>(null)
+  const [isViewOpen, setIsViewOpen] = useState(false)
+  const [viewTask, setViewTask] = useState<any>(null)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [deleteTaskId, setDeleteTaskId] = useState<any>(null)
+  const [isStatusOpen, setIsStatusOpen] = useState(false)
+  const [statusTask, setStatusTask] = useState<any>(null)
+  const [newStatus, setNewStatus] = useState("")
+  const [isAssignOpen, setIsAssignOpen] = useState(false)
+  const [assignTask_, setAssignTask_] = useState<any>(null)
+  const [assignUserId, setAssignUserId] = useState("")
+  const [assignComment, setAssignComment] = useState("")
+  const [isCompleteOpen, setIsCompleteOpen] = useState(false)
+  const [completeTask_, setCompleteTask_] = useState<any>(null)
+
+  // Form state
+  const emptyForm = {
+    title: "",
+    description: "",
+    entity_id: "",
+    entity_type: "" as string,
+    assignee_id: "",
+    due_date: "",
+    reminder_at: "",
+    priority: "normal" as string,
+  }
+  const [formData, setFormData] = useState(emptyForm)
+
+  const currentPage = Number(searchParams.get("page")) || 1
+  const limit = 20
+
+  // ─── Data Loading ────────────────────────────────────────────
+
+  const fetchTasks = async () => {
+    setIsLoading(true)
+    try {
+      const params: any = { page: currentPage, limit }
+      if (searchTerm) params.search = searchTerm
+      const res = await list_tasks(undefined, params)
+      const data = res?.data || (Array.isArray(res) ? res : [])
+      const total = res?.total || data.length
+      setTasks(data)
+      setTotalTasks(total)
+    } catch (err: any) {
+      console.error("Error loading tasks:", err)
+      toast.error(err?.message || "Ошибка при загрузке задач")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const loadMeta = async () => {
+      try {
+        const userData = getCurrentUser()
+        if (!userData) {
+          router.push("/auth/login")
+          return
+        }
+        setCurrentUser(userData)
+
+        // Load users
+        try {
+          const res = await listUsers()
+          const usersData = Array.isArray(res) ? res : (res as any)?.data || []
+          setUsers(Array.isArray(usersData) ? usersData : [])
+        } catch (err) {
+          console.error("Error loading users:", err)
+        }
+
+        // Load deals
+        try {
+          const { list_deals } = await import("@/src/api/deals.api")
+          const res = await list_deals()
+          const dealsData = res?.data || (Array.isArray(res) ? res : [])
+          setDeals(Array.isArray(dealsData) ? dealsData : [])
+        } catch (err) {
+          console.error("Error loading deals:", err)
+        }
+
+        // Load leads
+        try {
+          const { list_leads } = await import("@/src/api/leads.api")
+          const res = await list_leads()
+          const leadsData = res?.data || (Array.isArray(res) ? res : [])
+          setLeads(Array.isArray(leadsData) ? leadsData : [])
+        } catch (err) {
+          console.error("Error loading leads:", err)
+        }
+      } catch (err) {
+        console.error("Error loading meta:", err)
+      }
+    }
+    loadMeta()
+  }, [router])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTasks()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchTerm, currentPage])
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams)
+    params.set("page", page.toString())
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────
+
+  const getUserLabel = (userId: number) => {
+    const u = users.find((user) => user.id === userId || user.id?.toString() === userId?.toString())
+    return u
+      ? u.firstName
+        ? `${u.firstName} ${u.lastName || ""}`.trim()
+        : u.company_name || u.email || `Пользователь #${userId}`
+      : `Пользователь #${userId}`
+  }
+
+  const getEntityLabel = (entityId: number, entityType: string) => {
+    if (entityType === "deal") {
+      const deal = deals.find((d) => d.id === entityId || d.id?.toString() === entityId?.toString())
+      return deal ? `Сделка: ${deal.amount ? Number(deal.amount).toLocaleString() + " ₸" : "#" + deal.id}` : `Сделка #${entityId}`
+    }
+    if (entityType === "lead") {
+      const lead = leads.find((l) => l.id === entityId || l.id?.toString() === entityId?.toString())
+      return lead ? `Лид: ${lead.title || "#" + lead.id}` : `Лид #${entityId}`
+    }
+    return `#${entityId}`
+  }
+
+  const entityOptions = formData.entity_type === "deal"
+    ? deals.map((d) => ({ value: d.id.toString(), label: d.amount ? `${Number(d.amount).toLocaleString()} ₸ (#${d.id})` : `Сделка #${d.id}` }))
+    : formData.entity_type === "lead"
+      ? leads.map((l) => ({ value: l.id.toString(), label: l.title || `Лид #${l.id}` }))
+      : []
+
+  // ─── CRUD Handlers ──────────────────────────────────────────
+
+  const resetForm = () => {
+    setFormData(emptyForm)
+    setSelectedTask(null)
+  }
+
+  const openCreateDialog = () => {
+    resetForm()
+    setIsFormOpen(true)
+  }
+
+  const openEditDialog = (task: any) => {
+    setSelectedTask(task)
+    setFormData({
+      title: task.title || "",
+      description: task.description || "",
+      entity_id: task.entity_id?.toString() || "",
+      entity_type: task.entity_type || "",
+      assignee_id: task.assignee_id?.toString() || "",
+      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : "",
+      reminder_at: task.reminder_at ? new Date(task.reminder_at).toISOString().slice(0, 16) : "",
+      priority: task.priority || "normal",
+    })
+    setIsFormOpen(true)
+  }
+
+  const handleSubmitForm = async () => {
+    if (!formData.title.trim()) {
+      toast.error("Заголовок обязателен")
+      return
+    }
+
+    const payload = {
+      title: formData.title,
+      description: formData.description,
+      entity_id: formData.entity_id ? Number(formData.entity_id) : undefined,
+      entity_type: formData.entity_type || undefined,
+      assignee_id: formData.assignee_id ? Number(formData.assignee_id) : undefined,
+      due_date: formData.due_date ? new Date(formData.due_date).toISOString() : undefined,
+      reminder_at: formData.reminder_at ? new Date(formData.reminder_at).toISOString() : undefined,
+      priority: formData.priority || "normal",
+    }
+
+    try {
+      if (selectedTask) {
+        await update_task(payload as any, { id: selectedTask.id })
+        toast.success("Задача обновлена")
+      } else {
+        await create_task(payload as any)
+        toast.success("Задача создана")
+      }
+      setIsFormOpen(false)
+      resetForm()
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error saving task:", err)
+      toast.error(err?.message || "Ошибка при сохранении задачи")
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTaskId) return
+    try {
+      await delete_task(undefined, { id: deleteTaskId })
+      setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId))
+      toast.success("Задача удалена")
+    } catch (err: any) {
+      console.error("Error deleting task:", err)
+      toast.error(err?.message || "Ошибка при удалении задачи")
+    } finally {
+      setIsDeleteOpen(false)
+      setDeleteTaskId(null)
+    }
+  }
+
+  const handleChangeStatus = async () => {
+    if (!statusTask || !newStatus) return
+    try {
+      await change_task_status({ status: newStatus }, { id: statusTask.id })
+      toast.success("Статус обновлен")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error changing status:", err)
+      toast.error(err?.message || "Ошибка при смене статуса")
+    } finally {
+      setIsStatusOpen(false)
+      setStatusTask(null)
+      setNewStatus("")
+    }
+  }
+
+  const handleAssign = async () => {
+    if (!assignTask_ || !assignUserId) return
+    try {
+      await assign_task(
+        { assignee_id: Number(assignUserId) } as any,
+        { id: assignTask_.id }
+      )
+      toast.success("Задача назначена")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error assigning task:", err)
+      toast.error(err?.message || "Ошибка при назначении")
+    } finally {
+      setIsAssignOpen(false)
+      setAssignTask_(null)
+      setAssignUserId("")
+      setAssignComment("")
+    }
+  }
+
+  const handleComplete = async () => {
+    if (!completeTask_) return
+    try {
+      await complete_task(undefined, { id: completeTask_.id })
+      toast.success("Задача завершена")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error completing task:", err)
+      toast.error(err?.message || "Ошибка")
+    } finally {
+      setIsCompleteOpen(false)
+      setCompleteTask_(null)
+    }
+  }
+
+  // ─── Statistics ──────────────────────────────────────────────
+
+  const stats = {
+    total: totalTasks,
+    new: tasks.filter((t) => t.status === "new").length,
+    inProgress: tasks.filter((t) => t.status === "in_progress").length,
+    done: tasks.filter((t) => t.status === "done").length,
+  }
+
+  // ─── Skeleton Loading ────────────────────────────────────────
+
+  if (isLoading && tasks.length === 0) {
+    return (
+      <>
+        <Skeleton className="h-8 w-48 mb-4 m-6" />
+        <Skeleton className="h-4 w-64 mb-8 ml-6" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 mx-6">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+        <Skeleton className="h-12 mb-6 mx-6" />
+        <Skeleton className="h-96 mx-6" />
+      </>
+    )
+  }
+
+  // ─── Render ──────────────────────────────────────────────────
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Задачи</h1>
+          <p className="text-gray-600">Управление задачами и активностями</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={fetchTasks} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Новая задача
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 mx-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+                <p className="text-sm text-gray-600">Всего задач</p>
+              </div>
+              <ClipboardList className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-purple-600">{stats.new}</div>
+                <p className="text-sm text-gray-600">Новых</p>
+              </div>
+              <Clock className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-yellow-600">{stats.inProgress}</div>
+                <p className="text-sm text-gray-600">В работе</p>
+              </div>
+              <Activity className="h-8 w-8 text-yellow-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-green-600">{stats.done}</div>
+                <p className="text-sm text-gray-600">Выполнено</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <Card className="mb-6 mx-6">
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Поиск по названию или описанию..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tasks Table */}
+      <Card className="mx-6 mb-6">
+        <CardHeader>
+          <CardTitle>Список задач</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!tasks || tasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <ClipboardList className="h-12 w-12 text-gray-300 mb-4" />
+              <p className="text-gray-500 font-medium text-lg">Задач пока нет</p>
+              <p className="text-sm text-gray-400 mt-1">Создайте свою первую задачу</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Название</TableHead>
+                    <TableHead>Описание</TableHead>
+                    <TableHead>Исполнитель</TableHead>
+                    <TableHead>Объект</TableHead>
+                    <TableHead>Срок</TableHead>
+                    <TableHead>Приоритет</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead className="text-right">Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tasks.map((task) => {
+                    const taskStatus = (task.status || "new") as TaskStatus
+                    const taskPriority = (task.priority || "normal") as TaskPriority
+                    const allowedTransitions = statusTransitions[taskStatus] || []
+                    const isFinal = taskStatus === "done" || taskStatus === "cancelled"
+
+                    return (
+                      <TableRow key={task.id}>
+                        <TableCell className="font-medium max-w-[200px] truncate">
+                          {task.title}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate text-gray-500">
+                          {task.description || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {task.assignee_id ? getUserLabel(task.assignee_id) : "Не назначен"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {task.entity_id && task.entity_type
+                            ? getEntityLabel(task.entity_id, task.entity_type)
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? (
+                            <div className="flex items-center text-sm">
+                              <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                              {format(new Date(task.due_date), "dd.MM.yyyy", { locale: ru })}
+                            </div>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`${priorityColors[taskPriority] || priorityColors.normal} text-xs`}>
+                            {priorityLabels[taskPriority] || taskPriority}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`${statusColors[taskStatus] || statusColors.new} text-xs`}>
+                            {statusLabels[taskStatus] || taskStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setViewTask(task)
+                                setIsViewOpen(true)
+                              }}>
+                                <ClipboardList className="h-4 w-4 mr-2" />
+                                Просмотр
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(task)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Редактировать
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {!isFinal && allowedTransitions.length > 0 && (
+                                <DropdownMenuItem onClick={() => {
+                                  setStatusTask(task)
+                                  setNewStatus("")
+                                  setIsStatusOpen(true)
+                                }}>
+                                  <Activity className="h-4 w-4 mr-2" />
+                                  Изменить статус
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => {
+                                setAssignTask_(task)
+                                setAssignUserId(task.assignee_id?.toString() || "")
+                                setAssignComment("")
+                                setIsAssignOpen(true)
+                              }}>
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Назначить
+                              </DropdownMenuItem>
+                              {taskStatus === "in_progress" && (
+                                <DropdownMenuItem onClick={() => {
+                                  setCompleteTask_(task)
+                                  setIsCompleteOpen(true)
+                                }}>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Завершить
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setDeleteTaskId(task.id)
+                                  setIsDeleteOpen(true)
+                                }}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Удалить
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+
+        {totalTasks > limit && (
+          <div className="pb-4">
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalTasks / limit)}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
+      </Card>
+
+      {/* ── Create/Edit Dialog ─────────────────────────────────── */}
+      <Dialog open={isFormOpen} onOpenChange={(open) => { setIsFormOpen(open); if (!open) resetForm() }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedTask ? "Редактировать задачу" : "Создать задачу"}</DialogTitle>
+            <DialogDescription>
+              {selectedTask ? "Обновите информацию о задаче" : "Заполните информацию о новой задаче"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label>Заголовок <span className="text-red-500">*</span></Label>
+              <Input
+                placeholder="Введите название задачи..."
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>Описание</Label>
+              <Textarea
+                placeholder="Описание задачи..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Исполнитель</Label>
+              <ComboboxSelect
+                value={formData.assignee_id}
+                onChange={(val) => setFormData({ ...formData, assignee_id: val })}
+                placeholder="Выберите исполнителя"
+                searchPlaceholder="Поиск сотрудника..."
+                options={users.map((u) => ({
+                  value: u.id.toString(),
+                  label: u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : (u.company_name || u.email),
+                }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Приоритет</Label>
+              <CustomSelect
+                value={formData.priority}
+                onChange={(val) => setFormData({ ...formData, priority: val })}
+                placeholder="Выберите приоритет"
+                options={[
+                  { value: "low", label: "Низкий" },
+                  { value: "normal", label: "Обычный" },
+                  { value: "high", label: "Высокий" },
+                  { value: "urgent", label: "Срочный" },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Тип сущности</Label>
+              <CustomSelect
+                value={formData.entity_type}
+                onChange={(val) => setFormData({ ...formData, entity_type: val, entity_id: "" })}
+                placeholder="Выберите тип"
+                options={[
+                  { value: "deal", label: "Сделка" },
+                  { value: "lead", label: "Лид" },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Объект ({formData.entity_type === "deal" ? "Сделка" : formData.entity_type === "lead" ? "Лид" : "—"})</Label>
+              <ComboboxSelect
+                value={formData.entity_id}
+                onChange={(val) => setFormData({ ...formData, entity_id: val })}
+                placeholder={formData.entity_type ? "Выберите объект" : "Сначала выберите тип"}
+                searchPlaceholder="Поиск..."
+                emptyText="Ничего не найдено"
+                disabled={!formData.entity_type}
+                options={entityOptions}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Дедлайн</Label>
+              <Input
+                type="datetime-local"
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Напоминание</Label>
+              <Input
+                type="datetime-local"
+                value={formData.reminder_at}
+                onChange={(e) => setFormData({ ...formData, reminder_at: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Отмена</Button>
+            </DialogClose>
+            <Button onClick={handleSubmitForm} disabled={!formData.title.trim()}>
+              {selectedTask ? "Обновить" : "Создать"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── View Task Dialog ───────────────────────────────────── */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Задача #{viewTask?.id}</DialogTitle>
+            <DialogDescription>Подробная информация о задаче</DialogDescription>
+          </DialogHeader>
+          {viewTask && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Заголовок</Label>
+                  <p className="font-medium">{viewTask.title}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Статус</Label>
+                  <div className="mt-1">
+                    <Badge className={`${statusColors[(viewTask.status || "new") as TaskStatus]} text-xs`}>
+                      {statusLabels[(viewTask.status || "new") as TaskStatus]}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Приоритет</Label>
+                  <div className="mt-1">
+                    <Badge className={`${priorityColors[(viewTask.priority || "normal") as TaskPriority]} text-xs`}>
+                      {priorityLabels[(viewTask.priority || "normal") as TaskPriority]}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Исполнитель</Label>
+                  <p className="font-medium">{viewTask.assignee_id ? getUserLabel(viewTask.assignee_id) : "Не назначен"}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Объект</Label>
+                  <p className="font-medium">
+                    {viewTask.entity_id && viewTask.entity_type
+                      ? getEntityLabel(viewTask.entity_id, viewTask.entity_type)
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Дедлайн</Label>
+                  <p className="font-medium">
+                    {viewTask.due_date ? format(new Date(viewTask.due_date), "dd.MM.yyyy HH:mm", { locale: ru }) : "—"}
+                  </p>
+                </div>
+                {viewTask.reminder_at && (
+                  <div>
+                    <Label className="text-sm text-gray-500">Напоминание</Label>
+                    <p className="font-medium">{format(new Date(viewTask.reminder_at), "dd.MM.yyyy HH:mm", { locale: ru })}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-sm text-gray-500">Дата создания</Label>
+                  <p className="font-medium">
+                    {viewTask.created_at ? format(new Date(viewTask.created_at), "dd.MM.yyyy HH:mm", { locale: ru }) : "—"}
+                  </p>
+                </div>
+              </div>
+              {viewTask.description && (
+                <div>
+                  <Label className="text-sm text-gray-500">Описание</Label>
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{viewTask.description}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewOpen(false)}>Закрыть</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation ────────────────────────────────── */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя будет отменить. Задача будет удалена навсегда.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Change Status Dialog ───────────────────────────────── */}
+      <Dialog open={isStatusOpen} onOpenChange={setIsStatusOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Изменить статус задачи</DialogTitle>
+            <DialogDescription>
+              Текущий статус: {statusTask ? statusLabels[(statusTask.status || "new") as TaskStatus] : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {statusTask && (
+            <div className="space-y-3">
+              <Label>Новый статус</Label>
+              <CustomSelect
+                value={newStatus}
+                onChange={setNewStatus}
+                placeholder="Выберите статус"
+                options={(statusTransitions[(statusTask.status || "new") as TaskStatus] || []).map((s) => ({
+                  value: s,
+                  label: statusLabels[s],
+                }))}
+              />
+              {(statusTransitions[(statusTask.status || "new") as TaskStatus] || []).length === 0 && (
+                <p className="text-sm text-amber-600">Этот статус нельзя изменить</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">Отмена</Button></DialogClose>
+            <Button onClick={handleChangeStatus} disabled={!newStatus}>
+              Изменить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Assign Dialog ──────────────────────────────────────── */}
+      <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Назначить задачу</DialogTitle>
+            <DialogDescription>Выберите исполнителя для задачи</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Исполнитель</Label>
+              <ComboboxSelect
+                value={assignUserId}
+                onChange={setAssignUserId}
+                placeholder="Выберите сотрудника"
+                searchPlaceholder="Поиск..."
+                options={users.map((u) => ({
+                  value: u.id.toString(),
+                  label: u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : (u.company_name || u.email),
+                }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Комментарий (необязательно)</Label>
+              <Textarea
+                placeholder="Комментарий к назначению..."
+                value={assignComment}
+                onChange={(e) => setAssignComment(e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost">Отмена</Button></DialogClose>
+            <Button onClick={handleAssign} disabled={!assignUserId}>
+              Назначить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Complete Task Confirmation ─────────────────────────── */}
+      <AlertDialog open={isCompleteOpen} onOpenChange={setIsCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Завершить задачу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Задача &quot;{completeTask_?.title}&quot; будет отмечена как выполненная.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleComplete} className="bg-green-600 hover:bg-green-700">
+              Завершить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
