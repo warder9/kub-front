@@ -27,6 +27,7 @@ import {
   Shield,
   LogOut,
   Send,
+  MessageCircle,
 } from "lucide-react";
 import type { Auth_Login_Response } from "@/src/models/Auth.model";
 
@@ -79,6 +80,12 @@ const sidebarItems: SidebarItem[] = [
     title: "Чат",
     href: "/chat",
     icon: MessageSquare,
+    permissions: [],
+  },
+  {
+    title: "WhatsApp",
+    href: "/whatsapp",
+    icon: MessageCircle,
     permissions: [],
   },
 

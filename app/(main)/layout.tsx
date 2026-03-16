@@ -1,7 +1,6 @@
 "use client";
 
 import { RoleBasedSidebar } from "@/components/role-based-sidebar";
-import { MobileHeader } from "@/components/mobile-header";
 
 export default function MainLayout({
   children,

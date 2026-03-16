@@ -42,6 +42,7 @@ export type Auth_Register_Request = {
   email: string
   password: string
   phone: string
+  role_id: number
 }
 
 export type Auth_Register_Response = {

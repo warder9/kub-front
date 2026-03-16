@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,9 +21,16 @@ import {
   Phone,
   AlertCircle,
   User,
+  Crown,
+  Shield,
+  Target,
+  Users,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import * as RolesAPI from "@/src/api/roles.api";
+import type { Role } from "@/src/models/roles.model";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -32,14 +39,72 @@ export default function RegisterPage() {
     email: "",
     password: "",
     phone: "",
+    role_id: 5, // Default to sales role
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const router = useRouter();
 
-  const handleInputChange = (field: string, value: string) => {
+  // Fetch available roles
+  useEffect(() => {
+    const fetchRoles = async () => {
+      setRolesLoading(true);
+      try {
+        const response = await RolesAPI.listRoles({ limit: 100 });
+        const rolesList = Array.isArray(response) ? response : response.data || [];
+        // Filter out management roles for regular registration
+        const publicRoles = rolesList.filter(role => 
+          !role.name.toLowerCase().includes('management') && 
+          !role.name.toLowerCase().includes('admin')
+        );
+        setRoles(publicRoles);
+      } catch (error) {
+        console.error("Failed to fetch roles:", error);
+        // Fallback to default roles if API fails
+        setRoles([
+          { id: 5, name: "sales", description: "Менеджер по продажам", created_at: "", updated_at: "" },
+          { id: 10, name: "operations", description: "Операционный менеджер", created_at: "", updated_at: "" },
+          { id: 20, name: "control", description: "Контроль качества", created_at: "", updated_at: "" },
+        ]);
+      } finally {
+        setRolesLoading(false);
+      }
+    };
+
+    fetchRoles();
+  }, []);
+
+  const getRoleIcon = (roleName: string) => {
+    const name = roleName.toLowerCase();
+    if (name.includes('sales') || name.includes('продаж')) return Target;
+    if (name.includes('operation') || name.includes('операци')) return Settings;
+    if (name.includes('control') || name.includes('контроль')) return Shield;
+    if (name.includes('management') || name.includes('менедж')) return Crown;
+    return Users;
+  };
+
+  const getRoleLabel = (role: Role) => {
+    // Map role names to user-friendly labels
+    const labelMap: Record<string, string> = {
+      'sales': 'Менеджер по продажам',
+      'operations': 'Операционный менеджер', 
+      'control': 'Контроль качества',
+      'management': 'Руководитель',
+      'admin': 'Администратор',
+    };
+    
+    return labelMap[role.name.toLowerCase()] || role.description || role.name;
+  };
+
+  const handleInputChange = (field: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleRoleSelect = (roleId: number) => {
+    setFormData((prev) => ({ ...prev, role_id: roleId }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -186,6 +251,65 @@ export default function RegisterPage() {
                   disabled={isLoading}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-sm font-medium text-gray-700">
+                Роль в системе
+              </Label>
+              {rolesLoading ? (
+                <div className="flex items-center justify-center p-3 border border-gray-200 rounded-lg">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  <span className="ml-2 text-sm text-gray-500">Загрузка ролей...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {roles.map((role) => {
+                    const Icon = getRoleIcon(role.name);
+                    return (
+                      <div
+                        key={role.id}
+                        className={`
+                          relative p-3 border rounded-lg cursor-pointer transition-all duration-200
+                          ${formData.role_id === role.id
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          }
+                        `}
+                        onClick={() => handleRoleSelect(role.id)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Icon className={`h-5 w-5 ${
+                            formData.role_id === role.id ? "text-primary" : "text-gray-400"
+                          }`} />
+                          <div className="flex-1">
+                            <p className={`font-medium text-sm ${
+                              formData.role_id === role.id ? "text-primary" : "text-gray-900"
+                            }`}>
+                              {getRoleLabel(role)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {role.description}
+                            </p>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            formData.role_id === role.id
+                              ? "border-primary bg-primary"
+                              : "border-gray-300"
+                          }`}>
+                            {formData.role_id === role.id && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Выберите роль, которая лучше всего описывает ваши обязанности в компании
+              </p>
             </div>
 
             <Button

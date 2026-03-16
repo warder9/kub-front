@@ -39,17 +39,24 @@ export async function login(payload: Models.Auth_Login_Request, params?: Record<
   const res = await api.post(`/auth/login`, payload)
   const data = res.data
   
+  console.log("Login API response:", data); // Debug log
+  
   try {
     if (data?.tokens?.access_token) {
       setAuthToken(data.tokens.access_token)
+      console.log("Token set successfully");
     }
     if (data?.tokens?.refresh_token) {
       setRefreshToken(data.tokens.refresh_token)
+      console.log("Refresh token set successfully");
     }
     if (data?.user) {
+      console.log("User data found in response:", data.user); // Debug log
       // Преобразуем пользователя с сервера в формат приложения
       const transformedUser = transformUserFromServer(data.user)
+      console.log("Transformed user data:", transformedUser); // Debug log
       setCurrentUser(transformedUser)
+      console.log("setCurrentUser called successfully"); // Debug log
       
       // Также создаем компанию на основе данных пользователя
       const company = {
@@ -61,6 +68,9 @@ export async function login(payload: Models.Auth_Login_Request, params?: Record<
         status: 'active'
       }
       setCurrentCompany(company)
+      console.log("Company data set successfully:", company); // Debug log
+    } else {
+      console.log("No user data found in login response");
     }
   } catch (e) {
     console.error('Ошибка при сохранении данных авторизации:', e)
