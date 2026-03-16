@@ -90,6 +90,72 @@ export default function ChatPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const currentUser = getCurrentUser();
+  
+  // Debug current user
+  useEffect(() => {
+    console.log('Current user data:', currentUser);
+    console.log('Current user ID:', currentUser?.id);
+    console.log('Current user type:', typeof currentUser);
+    console.log('Current user keys:', currentUser ? Object.keys(currentUser) : 'null');
+    
+    // Check localStorage directly
+    if (typeof window !== 'undefined') {
+      const userData = localStorage.getItem('current_user');
+      console.log('Raw user data from localStorage:', userData);
+      if (userData) {
+        try {
+          const parsed = JSON.parse(userData);
+          console.log('Parsed user data:', parsed);
+          console.log('Parsed user ID:', parsed.id);
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
+      // Also check JWT token for user ID
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          console.log('JWT payload:', payload);
+          console.log('JWT user ID:', payload.user_id);
+        } catch (e) {
+          console.error('Error parsing JWT token:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Helper function to get current user ID with fallbacks
+  const getCurrentUserId = () => {
+    if (currentUser?.id) return currentUser.id;
+    
+    // Try to get from localStorage
+    if (typeof window !== 'undefined') {
+      const userData = localStorage.getItem('current_user');
+      if (userData) {
+        try {
+          const parsed = JSON.parse(userData);
+          if (parsed.id) return parsed.id;
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
+      // Try to get from JWT token
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload.user_id) return payload.user_id;
+        } catch (e) {
+          console.error('Error parsing JWT token:', e);
+        }
+      }
+    }
+    
+    return null;
+  };
 
   const [isCreateChatModalOpen, setIsCreateChatModalOpen] = useState(false);
   const [createPersonalChatUserId, setCreatePersonalChatUserId] = useState<string | null>(null);
@@ -100,20 +166,68 @@ export default function ChatPage() {
   const [addMembersList, setAddMembersList] = useState<string[]>([]);
   const [isChatVisible, setIsChatVisible] = useState(false);
 
-  const handleNewMessage = useCallback((newMessage: Message) => {
-    if (newMessage.chat_id === selectedChat?.id) {
-      setMessages(prevMessages => [...prevMessages, newMessage]);
+  const handleNewMessage = useCallback((newMessage: any) => {
+    console.log('WebSocket data received:', newMessage);
+    
+    // Check if this is actually a message, not a status update
+    if (!newMessage || typeof newMessage !== 'object') {
+      console.log('Invalid WebSocket data, ignoring:', newMessage);
+      return;
     }
-    const chat = (chats || []).find(c => c.id === newMessage.chat_id);
-    if (chat) {
-      chat.last_message_text = newMessage.text;
-      chat.last_message_at = newMessage.created_at;
-      if (newMessage?.sender_id?.toString() !== currentUser?.id?.toString()) {
-        chat.unread_count++;
+    
+    // Handle different WebSocket message types
+    if (newMessage.type === 'unread') {
+      console.log('Received unread status update:', newMessage);
+      // Update chat unread count
+      const chat = (chats || []).find(c => c.id === newMessage.chat_id);
+      if (chat) {
+        chat.unread_count = newMessage.unread_count || 0;
+        setChats([...chats]);
       }
-      setChats([...chats]);
+      return;
     }
-  }, [selectedChat, chats]);
+    
+    // Handle actual chat messages
+    if (newMessage.text && newMessage.sender_id && newMessage.created_at) {
+      console.log('Received actual chat message:', newMessage);
+      const currentUserId = getCurrentUserId();
+      console.log('Current selected chat ID:', selectedChat?.id);
+      console.log('New message chat ID:', newMessage.chat_id);
+      console.log('Current messages count:', messages.length);
+      console.log('Current user ID for WebSocket:', currentUserId);
+      console.log('Message sender ID for WebSocket:', newMessage.sender_id);
+      
+      if (newMessage.chat_id === selectedChat?.id) {
+        console.log('Adding message to current chat');
+        setMessages(prevMessages => {
+          // Check if message already exists to prevent duplicates
+          const messageExists = prevMessages.some(msg => msg.id === newMessage.id);
+          if (messageExists) {
+            console.log('Message already exists, not adding duplicate:', newMessage.id);
+            return prevMessages;
+          }
+          const updated = [...prevMessages, newMessage];
+          console.log('Messages updated after WebSocket:', updated);
+          return updated;
+        });
+      } else {
+        console.log('Message is for different chat, not adding to messages');
+      }
+      
+      // Update chat last message info
+      const chat = (chats || []).find(c => c.id === newMessage.chat_id);
+      if (chat) {
+        chat.last_message_text = newMessage.text;
+        chat.last_message_at = newMessage.created_at;
+        if (newMessage?.sender_id?.toString() !== currentUserId?.toString()) {
+          chat.unread_count++;
+        }
+        setChats([...chats]);
+      }
+    } else {
+      console.log('Received unknown WebSocket data type:', newMessage);
+    }
+  }, [selectedChat, chats, messages.length]);
 
   useWebSocket(selectedChat?.id ?? null, handleNewMessage);
 
@@ -150,15 +264,74 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
-    if (selectedChat) fetchMessages(selectedChat.id);
+    console.log('useEffect triggered for selectedChat:', selectedChat);
+    if (selectedChat) {
+      fetchMessages(selectedChat.id);
+    } else {
+      console.log('No selected chat, clearing messages');
+      setMessages([]);
+    }
   }, [selectedChat]);
 
   async function fetchMessages(chatId: number) {
+    console.log('Fetching messages for chat:', chatId);
     setMessagesLoading(true);
     setMessagesError(null);
     try {
       const res = await getMessages(chatId, 50, 0);
-      setMessages(Array.isArray(res) ? res : []);
+      console.log('Raw API response:', res);
+      console.log('Response type:', typeof res);
+      console.log('Is array:', Array.isArray(res));
+      
+      // Handle different API response formats
+      let messagesArray: any[] = [];
+      
+      if (Array.isArray(res)) {
+        // Direct array response
+        messagesArray = res;
+      } else if (res && (res as any).value && Array.isArray((res as any).value)) {
+        // Response with .value property (like {Count: 17, value: Array(17)})
+        messagesArray = (res as any).value;
+        console.log('Extracted messages from response.value:', messagesArray.length);
+      } else if (res && (res as any).data && Array.isArray((res as any).data)) {
+        // Response with .data property
+        messagesArray = (res as any).data;
+        console.log('Extracted messages from response.data:', messagesArray.length);
+      } else {
+        console.log('Unexpected response format, trying to extract messages...');
+        // Try to find an array in the response
+        const values = Object.values(res || {});
+        const arrayValue = values.find((val): val is any[] => Array.isArray(val));
+        if (arrayValue) {
+          messagesArray = arrayValue;
+          console.log('Found messages array in response property:', messagesArray.length);
+        }
+      }
+      
+      console.log('Final messages array length:', messagesArray.length);
+      
+      // Log each message details
+      messagesArray.forEach((msg: any, index: number) => {
+        console.log(`Message ${index}:`, {
+          id: msg.id,
+          text: msg.text,
+          created_at: msg.created_at,
+          sender_id: msg.sender_id,
+          chat_id: msg.chat_id
+        });
+      });
+      
+      // Deduplicate messages by ID
+      const uniqueMessages = messagesArray.filter((message: any, index: number, self: any[]) =>
+        index === self.findIndex((m) => m.id === message.id)
+      );
+      
+      if (uniqueMessages.length !== messagesArray.length) {
+        console.log(`Deduplicated ${messagesArray.length - uniqueMessages.length} duplicate messages`);
+      }
+      
+      console.log('Setting unique messages:', uniqueMessages);
+      setMessages(uniqueMessages);
 
       // Mark messages as read
       const chat = chats.find(c => c.id === chatId);
@@ -176,7 +349,12 @@ export default function ChatPage() {
         }
       }
     } catch (e: any) {
-      console.error(e);
+      console.error('Error fetching messages:', e);
+      console.error('Error details:', {
+        message: e.message,
+        status: e.response?.status,
+        data: e.response?.data
+      });
       setMessagesError(e.message || "Не удалось загрузить сообщения");
     } finally {
       setMessagesLoading(false);
@@ -186,11 +364,44 @@ export default function ChatPage() {
   const handleSendMessage = async (text: string, attachments: string[] = []) => {
     if (!text.trim() || !selectedChat) return;
 
+    console.log('Sending message:', { text, attachments, chatId: selectedChat.id });
+
     try {
-      await sendMessage(selectedChat.id, { text, attachments });
+      const response = await sendMessage(selectedChat.id, { text, attachments });
+      console.log('Message sent successfully:', response);
+      console.log('Response details:', {
+        id: response.id,
+        text: response.text,
+        created_at: response.created_at,
+        chat_id: response.chat_id
+      });
+      
+      // Check if the response has a valid ID (indicates it was saved)
+      if (!response.id) {
+        console.error('Message response missing ID - may not have been saved to database');
+      }
+      
+      // Immediately add the message to local state to show it right away
+      setMessages(prevMessages => {
+        // Check if message already exists to prevent duplicates
+        const messageExists = prevMessages.some(msg => msg.id === response.id);
+        if (messageExists) {
+          console.log('Message already exists in local state, not adding duplicate:', response.id);
+          return prevMessages;
+        }
+        const newMessages = [...prevMessages, response];
+        console.log('Messages updated after sending:', newMessages);
+        return newMessages;
+      });
+      
       setMessage("");
     } catch (e: any) {
-      console.error(e);
+      console.error('Error sending message:', e);
+      console.error('Send error details:', {
+        message: e.message,
+        status: e.response?.status,
+        data: e.response?.data
+      });
     }
   };
 
@@ -276,11 +487,16 @@ export default function ChatPage() {
 
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return "";
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return "";
+      return date.toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      return "";
+    }
   };
 
   useEffect(() => {
@@ -398,6 +614,68 @@ export default function ChatPage() {
       </Popover>
     );
   };
+
+  // Debug function to manually refresh messages
+  const debugRefreshMessages = () => {
+    console.log('Debug: Manually refreshing messages');
+    if (selectedChat) {
+      fetchMessages(selectedChat.id);
+    } else {
+      console.log('No selected chat to refresh messages for');
+    }
+  };
+
+  // Test function to check message persistence
+  const debugTestMessagePersistence = async () => {
+    if (!selectedChat) {
+      console.log('No selected chat for persistence test');
+      return;
+    }
+    
+    console.log('=== MESSAGE PERSISTENCE TEST ===');
+    console.log('1. Fetching current messages...');
+    
+    // Get current messages
+    const beforeMessages = await getMessages(selectedChat.id, 50, 0);
+    console.log('Messages before test:', beforeMessages?.length || 0);
+    
+    // Send a test message
+    const testText = `Test message ${Date.now()}`;
+    console.log('2. Sending test message:', testText);
+    
+    try {
+      const sentMessage = await sendMessage(selectedChat.id, { text: testText, attachments: [] });
+      console.log('3. Message sent:', sentMessage);
+      
+      // Wait a moment then fetch again
+      setTimeout(async () => {
+        console.log('4. Fetching messages after sending...');
+        const afterMessages = await getMessages(selectedChat.id, 50, 0);
+        console.log('Messages after test:', afterMessages?.length || 0);
+        
+        // Check if our test message is in the list
+        const foundTestMessage = afterMessages?.find(msg => msg.text === testText);
+        console.log('Test message found in database:', !!foundTestMessage);
+        
+        if (!foundTestMessage) {
+          console.error('❌ MESSAGE NOT PERSISTED - Test message not found in database!');
+        } else {
+          console.log('✅ MESSAGE PERSISTED - Test message found in database');
+        }
+        console.log('=== END PERSISTENCE TEST ===');
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error in persistence test:', error);
+    }
+  };
+
+  // Make debug functions available in console
+  useEffect(() => {
+    (window as any).debugRefreshMessages = debugRefreshMessages;
+    (window as any).debugTestMessagePersistence = debugTestMessagePersistence;
+    console.log('Debug functions available: debugRefreshMessages(), debugTestMessagePersistence()');
+  }, [selectedChat]);
 
   return (
     <div className="flex h-screen">
@@ -642,8 +920,12 @@ export default function ChatPage() {
               </div >
 
               {/* Messages */}
-              < ScrollArea className="flex-1 p-4 bg-gray-50" >
+              <ScrollArea className="flex-1 p-4 bg-gray-50">
                 <div className="space-y-4">
+                  {(() => {
+                    console.log('Rendering messages section:', { messagesLoading, messagesError, messagesLength: messages.length, messages });
+                    return null;
+                  })()}
                   {messagesLoading && (
                     <div className="py-4 text-center">Загрузка сообщений...</div>
                   )}
@@ -652,11 +934,33 @@ export default function ChatPage() {
                   )}
                   {!messagesLoading &&
                     !messagesError &&
-                    messages.reduce((acc: React.ReactNode[], msg, index) => {
-                      const isCurrentUser = msg?.sender_id?.toString() === currentUser?.id?.toString();
+                    (messages.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <MessageCircle className="h-12 w-12 text-gray-300 mb-4" />
+                        <p className="text-gray-500 font-medium">Нет сообщений</p>
+                        <p className="text-sm text-gray-400">Начните диалог первым сообщением!</p>
+                      </div>
+                    ) : (
+                      messages.reduce((acc: React.ReactNode[], msg, index) => {
+                        console.log('Rendering message:', msg, 'index:', index);
+                        const currentUserId = getCurrentUserId();
+                        const isCurrentUser = msg?.sender_id?.toString() === currentUserId?.toString();
+                        console.log('Message alignment check:', {
+                          messageSenderId: msg?.sender_id,
+                          currentUserId: currentUserId,
+                          isCurrentUser,
+                          messageText: msg.text?.substring(0, 20)
+                        });
 
                       // Date Separator Logic
                       const messageDate = new Date(msg.created_at);
+                      
+                      // Skip invalid dates
+                      if (isNaN(messageDate.getTime())) {
+                        console.warn('Invalid date for message:', msg);
+                        return acc;
+                      }
+                      
                       const prevMessage = index > 0 ? messages[index - 1] : null;
                       const prevMessageDate = prevMessage ? new Date(prevMessage.created_at) : null;
 
@@ -687,19 +991,28 @@ export default function ChatPage() {
                       const senderName = senderUser
                         ? (senderUser.firstName ? `${senderUser.firstName} ${senderUser.lastName || ''}`.trim() : (senderUser.company_name || senderUser.email))
                         : "Неизвестный";
+                      
+                      console.log('Sender name debug:', {
+                        messageSenderId: msg?.sender_id,
+                        isCurrentUser,
+                        isGroupChat: selectedChat?.is_group,
+                        senderUser: senderUser,
+                        senderName: senderName,
+                        selectedChat: selectedChat
+                      });
 
                       acc.push(
                         <div
                           key={msg.id}
-                          className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'} mb-2`}
+                          className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'} mb-3 w-full`}
                         >
-                          {!isCurrentUser && selectedChat?.is_group && (
+                          {!isCurrentUser && (
                             <span className="text-xs text-muted-foreground ml-2 mb-1">{senderName}</span>
                           )}
                           <div
-                            className={`max-w-[85%] md:max-w-[70%] px-3 py-2 rounded-2xl shadow-sm relative ${isCurrentUser
-                              ? 'bg-blue-600 text-white rounded-tr-none'
-                              : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'
+                            className={`max-w-[85%] md:max-w-[70%] px-4 py-2 rounded-2xl shadow-sm relative ${isCurrentUser
+                              ? 'bg-blue-600 text-white rounded-tr-none ml-auto'
+                              : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none mr-auto'
                               }`}
                           >
                             <p className="whitespace-pre-wrap break-words leading-relaxed text-sm pr-12 pb-1">
@@ -725,7 +1038,14 @@ export default function ChatPage() {
 
                             <div className="flex justify-end items-center gap-1 absolute bottom-1 right-2">
                               <span className={`text-[10px] ${isCurrentUser ? "text-blue-100 opacity-80" : "text-gray-400"}`}>
-                                {format(new Date(msg.created_at), 'HH:mm')}
+                                {(() => {
+                                  try {
+                                    const msgDate = new Date(msg.created_at);
+                                    return isNaN(msgDate.getTime()) ? '' : format(msgDate, 'HH:mm');
+                                  } catch (e) {
+                                    return '';
+                                  }
+                                })()}
                               </span>
                               {isCurrentUser && (
                                 msg.is_read ? (
@@ -739,7 +1059,8 @@ export default function ChatPage() {
                         </div>
                       );
                       return acc;
-                    }, [])}
+                    }, []))
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea >
