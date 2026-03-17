@@ -337,10 +337,34 @@ export default function DealsPage() {
 
         // Load leads (for dropdown)
         try {
-          const { list_leads } = await import("@/src/api/leads.api");
-          const leadsRes = await list_leads();
+          console.log('=== DEALS PAGE: Starting leads load ===');
+          const { list_leads, list_my_leads } = await import("@/src/api/leads.api");
+          
+          // Get current user to determine which API to use
+          const currentUser = getCurrentUser();
+          console.log('Deals page - loading leads for user:', currentUser?.role);
+          console.log('Current user object:', currentUser);
+          
+          // AGGRESSIVE SAFEGUARD: Always use list_my_leads for sales users
+          let leadsRes;
+          if (currentUser?.role === 'sales') {
+            console.log('SAFEGUARD: Using list_my_leads for sales user');
+            leadsRes = await list_my_leads();
+            console.log('list_my_leads response:', leadsRes);
+          } else {
+            console.log('Using list_leads for non-sales user');
+            leadsRes = await list_leads();
+            console.log('list_leads response:', leadsRes);
+          }
+            
           const leadsData = leadsRes?.data || leadsRes || [];
+          console.log('Processed leads data:', leadsData);
+          console.log('Leads data type:', Array.isArray(leadsData) ? 'array' : typeof leadsData);
+          console.log('Leads data length:', leadsData.length);
+          
           setLeads(Array.isArray(leadsData) ? leadsData : []);
+          console.log('Leads loaded:', leadsData.length, 'leads');
+          console.log('=== DEALS PAGE: Leads load completed ===');
         } catch (err) {
           console.error("Error loading leads:", err);
         }
@@ -371,6 +395,16 @@ export default function DealsPage() {
     }
   }, [currentPage, statusFilter, user]);
 
+  // Debug leads state changes
+  useEffect(() => {
+    console.log('=== LEADS STATE DEBUG ===');
+    console.log('Leads state:', leads);
+    console.log('Leads length:', leads.length);
+    console.log('Leads type:', Array.isArray(leads) ? 'array' : typeof leads);
+    console.log('First lead:', leads[0]);
+    console.log('=== LEADS STATE DEBUG END ===');
+  }, [leads]);
+
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -396,10 +430,37 @@ export default function DealsPage() {
     });
   };
 
+  // Refresh leads function
+  const refreshLeads = async () => {
+    console.log('=== MANUAL LEADS REFRESH ===');
+    try {
+      const { list_leads, list_my_leads } = await import("@/src/api/leads.api");
+      
+      const currentUser = getCurrentUser();
+      let leadsRes;
+      if (currentUser?.role === 'sales') {
+        console.log('MANUAL REFRESH: Using list_my_leads for sales user');
+        leadsRes = await list_my_leads();
+      } else {
+        console.log('MANUAL REFRESH: Using list_leads for non-sales user');
+        leadsRes = await list_leads();
+      }
+        
+      const leadsData = leadsRes?.data || leadsRes || [];
+      console.log('Manual refresh - leads loaded:', leadsData.length);
+      setLeads(Array.isArray(leadsData) ? leadsData : []);
+    } catch (err) {
+      console.error("Manual refresh error:", err);
+    }
+  };
+
   // Open create dialog
   const openCreateDialog = () => {
     resetNewDealForm();
     setIsCreateDialogOpen(true);
+    // Debug: manually refresh leads when opening dialog
+    console.log('Opening create dialog - refreshing leads...');
+    refreshLeads();
   };
 
   // Open edit dialog
