@@ -243,7 +243,13 @@ export default function ChatPage() {
       const res = await listUsers();
       setUsers(Array.isArray(res) ? res : (res as any).data || []);
     } catch (e: any) {
-      console.error(e);
+      // Handle 403 errors gracefully - users list is not critical for chat functionality
+      if (e?.response?.status === 403) {
+        console.log('403 error loading users for chat, setting empty array');
+        setUsers([]);
+      } else {
+        console.error(e);
+      }
     } finally {
       setUsersLoading(false);
     }

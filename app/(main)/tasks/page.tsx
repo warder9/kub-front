@@ -90,6 +90,7 @@ import { getCurrentUser, getCurrentCompany } from "@/lib/auth"
 import {
   create_task,
   list_tasks,
+  list_my_tasks,
   update_task,
   delete_task,
   change_task_status,
@@ -270,7 +271,20 @@ export default function TasksPage() {
     try {
       const params: any = { page: currentPage, limit }
       if (searchTerm) params.search = searchTerm
-      const res = await list_tasks(undefined, params)
+
+      // Prevent sales users from accessing full tasks list
+      const effectiveView = currentUser?.role === 'sales' ? 'my' : 'all';
+      
+      console.log('fetchTasks called:', { 
+        userRole: currentUser?.role, 
+        effectiveView,
+        endpoint: effectiveView === "all" ? '/tasks' : '/tasks/my'
+      });
+      
+      const res = effectiveView === "all"
+        ? await list_tasks(undefined, params)
+        : await list_my_tasks(undefined, params);
+      
       const data = res?.data || (Array.isArray(res) ? res : [])
       const total = res?.total || data.length
       setTasks(data)
@@ -323,8 +337,14 @@ export default function TasksPage() {
           const res = await listUsers()
           const usersData = Array.isArray(res) ? res : (res as any)?.data || []
           setUsers(Array.isArray(usersData) ? usersData : [])
-        } catch (err) {
-          console.error("Error loading users:", err)
+        } catch (err: any) {
+          // Handle 403 errors gracefully - users list is not critical for tasks
+          if (err?.response?.status === 403) {
+            console.log('403 error loading users for tasks, setting empty array');
+            setUsers([]);
+          } else {
+            console.error("Error loading users:", err)
+          }
         }
 
         // Load deals
@@ -355,10 +375,28 @@ export default function TasksPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchTasks()
+      // Only fetch if user is loaded
+      if (currentUser) {
+        fetchTasks()
+      }
     }, 500)
     return () => clearTimeout(timer)
-  }, [searchTerm, currentPage])
+  }, [searchTerm, currentPage, currentUser])
+
+  const handleRefresh = () => {
+    console.log('handleRefresh called:', { 
+      user: currentUser?.role, 
+      userLoaded: !!currentUser 
+    });
+    
+    // Ensure user is loaded before refreshing
+    if (!currentUser) {
+      console.log('User not loaded, skipping refresh');
+      return;
+    }
+    
+    fetchTasks();
+  };
 
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams(searchParams)
@@ -560,7 +598,7 @@ export default function TasksPage() {
           <p className="text-gray-600">Управление задачами и активностями</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchTasks} disabled={isLoading}>
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
           <Button onClick={openCreateDialog}>

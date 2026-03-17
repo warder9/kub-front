@@ -1,5 +1,6 @@
 import { User } from '@/src/models/User.model'
 import { Client } from '@/src/models/Client.model'
+import { tokenManager } from '@/lib/token-manager'
 
 // Функции для работы с пользователем
 export function setCurrentUser(user: User): void {
@@ -55,10 +56,39 @@ export function clearAuthData(): void {
       localStorage.removeItem('current_company')
       localStorage.removeItem('auth_token')
       localStorage.removeItem('refresh_token')
+      // Clear token refresh timer
+      tokenManager.clearRefreshTimer()
     }
   } catch (e) {
     console.error('Ошибка при очистке данных авторизации:', e)
   }
+}
+
+// Token validation utilities
+export function getStoredTokens(): { accessToken: string | null; refreshToken: string | null } {
+  try {
+    if (typeof window !== 'undefined') {
+      const accessToken = localStorage.getItem('auth_token')
+      const refreshToken = localStorage.getItem('refresh_token')
+      return { accessToken, refreshToken }
+    }
+  } catch (e) {
+    console.error('Ошибка при получении токенов:', e)
+  }
+  return { accessToken: null, refreshToken: null }
+}
+
+export function isTokenValid(token: string): boolean {
+  if (!token) return false
+  return !tokenManager.isTokenExpiringSoon(token)
+}
+
+export function getTokenExpiryTime(token: string): number {
+  return tokenManager.getTimeUntilExpiry(token)
+}
+
+export function initializeTokenRefresh(): void {
+  tokenManager.initializeTokenRefresh()
 }
 
 // Функция для проверки прав доступа
@@ -73,10 +103,10 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
     return true;
   }
 
-  // Маппинг ролей к разрешениям
+  // Маппинг ролей к разрешениям согласно требованиям к уровням доступа
   const rolePermissions: Record<string, string[]> = {
     admin: [
-      'users:read',
+      'users:read',      // Полный доступ ко всем данным системы
       'users:write',
       'leads:read',
       'leads:write',
@@ -84,7 +114,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'deals:write',
       'clients:read',
       'clients:write',
-      'tasks:read',
+      'tasks:read',     // Доступ к мессенджеру и задачам
       'tasks:write',
       'documents:read',
       'documents:write',
@@ -94,6 +124,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'settings:write',
     ],
     management: [
+      // Руководство: Полный доступ ко всем данным системы, за исключением сведений о руководстве
       'users:read',
       'leads:read',
       'leads:write',
@@ -107,8 +138,10 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:write',
       'analytics:read',
       'analytics:write',
+      'users:write',     // Управление ролями
     ],
     control: [
+      // Отдел контроля: Просмотр всей информации, за исключением сведений о руководстве
       'leads:read',
       'deals:read',
       'clients:read',
@@ -117,6 +150,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'analytics:read',
     ],
     operations: [
+      // Операционный отдел: Приём и проверка документов, передача проверенных документов продажникам
       'leads:read',
       'deals:read',
       'clients:read',
@@ -127,6 +161,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:write',
     ],
     sales: [
+      // Продажник: Обработка заявок, доступ к информации по клиентам, подготовка документов, доступ к лидам и продажам
       'leads:read',
       'leads:write',
       'deals:read',
@@ -135,6 +170,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'clients:write',
       'tasks:read',
       'tasks:write',
+      'documents:read', // Только для подготовки документов
     ],
   };
 
@@ -163,7 +199,7 @@ export function getUserRoleText(role: string | undefined): string {
     sales: 'Отдел продаж',
   };
   
-  return roleMap[role || ''] || role || 'Пользователь';
+  return roleMap[role ?? ''] ?? role ?? 'Пользователь';
 }
 
 // Функция для проверки авторизации пользователя
@@ -187,7 +223,7 @@ export function switchTestRole(role: User['role']): void {
   if (currentUser && typeof window !== 'undefined') {
     // Store original role if not already stored
     if (!localStorage.getItem('original_user_role')) {
-      localStorage.setItem('original_user_role', currentUser.role);
+      localStorage.setItem('original_user_role', currentUser.role ?? '');
     }
     
     const updatedUser = { ...currentUser, role };

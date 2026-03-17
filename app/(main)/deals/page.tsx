@@ -169,12 +169,33 @@ export default function DealsPage() {
   const fetchDeals = async () => {
     setIsLoading(true);
     try {
-      const { list_deals } = await import("@/src/api/deals.api");
+      const { list_deals, list_my_deals } = await import("@/src/api/deals.api");
       const params: any = { page: currentPage, limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
 
-      const dealsRes = await list_deals(undefined, params);
+      // Get current user data directly to ensure we have the latest role
+      const currentUser = getCurrentUser();
+      const userRole = currentUser?.role || user?.role;
+      
+      // Prevent sales users from accessing full deals list
+      const effectiveView = userRole === 'sales' ? 'my' : 'all';
+      
+      console.log('fetchDeals called:', { 
+        userRole,
+        currentUserRole: currentUser?.role,
+        stateUserRole: user?.role,
+        effectiveView,
+        endpoint: effectiveView === "all" ? '/deals' : '/deals/my'
+      });
+      
+      // Extra safeguard: if we can't determine the user role, default to 'my' for safety
+      const finalView = (!userRole || userRole === 'sales') ? 'my' : effectiveView;
+      
+      const dealsRes = finalView === "all"
+        ? await list_deals(undefined, params)
+        : await list_my_deals(undefined, params);
+      
       const dealsData = (dealsRes?.data || (Array.isArray(dealsRes) ? dealsRes : []));
       const total = dealsRes?.total || dealsData.length;
 
@@ -282,14 +303,14 @@ export default function DealsPage() {
               lastName: "",
               email: companyData.email,
               phone: companyData.phone,
-              role: "admin",
+              role: "sales", // Default to sales for safety - will be overridden by actual user data
               company_name: companyData.name,
               role_id: 30,
               is_verified: true,
               status: 'active'
             };
             setUser(tempUser);
-            console.log("Using temporary user data:", tempUser);
+            console.log("Using temporary user data (defaulted to sales):", tempUser);
             return;
           }
         }
@@ -344,21 +365,24 @@ export default function DealsPage() {
 
   // Fetch deals on params change
   useEffect(() => {
-    fetchDeals();
-  }, [currentPage, statusFilter]);
+    // Only fetch deals if we have a user
+    if (user) {
+      fetchDeals();
+    }
+  }, [currentPage, statusFilter, user]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Only fetch if searchTerm changed (controlled by dep array), and avoid initial double fetch if empty?
-      // Actually initial fetch is handled by useEffect([currentPage...]) if searchTerm is empty.
-      // If searchTerm is not empty, this runs.
-      if (searchTerm !== "") fetchDeals();
-      else fetchDeals(); // Fetch all if search cleared
+      // Only fetch if user is loaded
+      if (user) {
+        if (searchTerm !== "") fetchDeals();
+        else fetchDeals(); // Fetch all if search cleared
+      }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, user]);
 
   // Reset new deal form
   const resetNewDealForm = () => {
@@ -558,8 +582,24 @@ export default function DealsPage() {
   };
 
   // Handle refresh
-  // Handle refresh
   const handleRefresh = async () => {
+    // Get current user data directly
+    const currentUser = getCurrentUser();
+    const userRole = currentUser?.role || user?.role;
+    
+    console.log('handleRefresh called:', { 
+      userRole,
+      currentUserRole: currentUser?.role,
+      stateUserRole: user?.role,
+      userLoaded: !!(currentUser || user)
+    });
+    
+    // Ensure user is loaded before refreshing
+    if (!currentUser && !user) {
+      console.log('User not loaded, skipping refresh');
+      return;
+    }
+    
     fetchDeals();
     // Refresh meta if needed
     try {

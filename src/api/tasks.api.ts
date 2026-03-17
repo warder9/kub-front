@@ -11,6 +11,11 @@ export async function list_tasks(payload?: void, params?: Record<string, any>): 
   return res.data
 }
 
+export async function list_my_tasks(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.get(`/tasks/my`, { params })
+  return res.data
+}
+
 export async function get_task(payload?: void, params?: Record<string, any>): Promise<any> {
   const res = await api.get(`/tasks/${params.id}`, { params })
   return res.data

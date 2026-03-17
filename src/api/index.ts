@@ -1,4 +1,5 @@
 import axios from "axios"
+import { tokenManager } from "@/lib/token-manager"
 
 // Используем прокси маршрут для обхода CORS
 const isBrowser = typeof window !== 'undefined'
@@ -68,6 +69,8 @@ export function setAuthToken(token: string | null) {
       setCookie("auth_token", token, 7)
       if (typeof window !== 'undefined') {
         localStorage.setItem('auth_token', token)
+        // Initialize proactive token refresh
+        tokenManager.scheduleTokenRefresh(token)
       }
     } catch (e) {
       console.error('Error setting auth token:', e)
@@ -78,6 +81,8 @@ export function setAuthToken(token: string | null) {
       deleteCookie("auth_token")
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token')
+        // Clear refresh timer on logout
+        tokenManager.clearRefreshTimer()
       }
     } catch (e) {
       console.error('Error removing auth token:', e)
@@ -146,7 +151,22 @@ api.interceptors.request.use((config) => {
 
 import { clearAuthData } from "@/lib/auth";
 
-// Response interceptor: attempt refresh on 401, otherwise normalize error
+// Refresh token mutex to prevent race conditions
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+// Add subscriber to be notified when token is refreshed
+function addRefreshSubscriber(callback: (token: string) => void) {
+  refreshSubscribers.push(callback);
+}
+
+// Notify all subscribers that token has been refreshed
+function notifyRefreshSubscribers(token: string) {
+  refreshSubscribers.forEach(callback => callback(token));
+  refreshSubscribers = [];
+}
+
+// Response interceptor: attempt refresh on 401/403, otherwise normalize error
 api.interceptors.response.use(
   (res) => {
     console.log('Response received:', res.status, res.config.url)
@@ -170,48 +190,91 @@ api.interceptors.response.use(
     if (status === 401 && originalRequest && !originalRequest._retry) {
       // Prevent recursive refresh if the refresh call itself fails
       if (originalRequest.url === '/auth/refresh') {
-        if (typeof window !== 'undefined') {
-          console.log("Logging out due to failed refresh token...");
-          clearAuthData();
-          deleteCookie('auth_token');
-          deleteCookie('refresh_token');
-          window.location.href = '/auth/login';
-          return new Promise(() => { }); // Prevent further actions
-        }
+        console.log("Refresh endpoint failed - logging out...");
+        await forceLogout('Session expired. Please login again.');
         return Promise.reject(error);
+      }
+
+      // If already refreshing, wait for the new token
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          addRefreshSubscriber((token: string) => {
+            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
       }
 
       console.log('Attempting token refresh...');
       originalRequest._retry = true;
+      isRefreshing = true;
+      
       try {
-        const refreshToken = getCookie('refresh_token') || (typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null);
+        const refreshToken = getRefreshToken();
         if (refreshToken) {
-          const resp = await api.post('/auth/refresh', { refresh_token: refreshToken });
-          const newAccess = resp?.data?.access_token || resp?.data?.tokens?.access_token;
-          const newRefresh = resp?.data?.refresh_token || resp?.data?.tokens?.refresh_token;
+          // Create a new axios instance for refresh to avoid interceptor loop
+          const refreshApi = axios.create({
+            baseURL,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 30000,
+          });
+          
+          const resp = await refreshApi.post('/auth/refresh', { refresh_token: refreshToken });
+          const data = resp.data;
+          
+          // Handle different response formats
+          const newAccess = data?.tokens?.access_token || data?.access_token;
+          const newRefresh = data?.tokens?.refresh_token || data?.refresh_token;
 
-          if (newAccess) setAuthToken(newAccess);
-          if (newRefresh) setRefreshToken(newRefresh);
+          if (newAccess) {
+            setAuthToken(newAccess);
+            console.log('Access token refreshed successfully');
+            // Notify all waiting requests
+            notifyRefreshSubscribers(newAccess);
+          }
+          if (newRefresh) {
+            setRefreshToken(newRefresh);
+            console.log('Refresh token rotated successfully');
+          }
 
-          originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
-          console.log('Token refreshed, retrying original request');
-          return api(originalRequest);
+          // Update original request with new token
+          if (newAccess) {
+            originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
+            console.log('Retrying original request with new token');
+            return api(originalRequest);
+          }
+        } else {
+          console.log('No refresh token available');
+          await forceLogout('No refresh token available. Please login again.');
         }
-      } catch (e) {
-        console.error('Ошибка при обновлении токена:', e);
-        // If refresh fails, proceed to logout
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        await forceLogout('Failed to refresh session. Please login again.');
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
+    }
 
-      // If refresh token is invalid or missing, or if refresh fails, logout user
-      if (typeof window !== 'undefined') {
-        console.log("Logging out due to invalid token...");
-        clearAuthData();
-        deleteCookie('auth_token');
-        deleteCookie('refresh_token');
-        window.location.href = '/auth/login';
-        // Return a promise that never resolves to prevent further actions
-        return new Promise(() => { });
-      }
+    // Handle 403 Forbidden errors
+    if (status === 403) {
+      console.error('Access forbidden - insufficient permissions');
+      const message = error?.response?.data?.message || 'Access forbidden. You do not have permission to perform this action.';
+      return Promise.reject(new Error(message));
+    }
+
+    // Handle network errors
+    if (!status && error.code === 'NETWORK_ERROR') {
+      console.error('Network error - no connection');
+      return Promise.reject(new Error('Network error. Please check your internet connection.'));
+    }
+
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED') {
+      console.error('Request timeout');
+      return Promise.reject(new Error('Request timeout. Please try again.'));
     }
 
     // Handle other errors
@@ -224,5 +287,55 @@ api.interceptors.response.use(
     return Promise.reject(new Error(message));
   }
 )
+
+// Unified logout function with proper cleanup
+async function forceLogout(message?: string) {
+  if (typeof window !== 'undefined') {
+    console.log("Logging out due to authentication failure...");
+    
+    // Clear all authentication data
+    clearAuthData();
+    deleteCookie('auth_token');
+    deleteCookie('refresh_token');
+    
+    // Clear token refresh timer
+    tokenManager.clearRefreshTimer();
+    
+    // Clear axios default headers
+    delete api.defaults.headers.common["Authorization"];
+    
+    // Store logout message for display on login page
+    if (message) {
+      sessionStorage.setItem('logout_message', message);
+    }
+    
+    // Only redirect if not already on login page
+    if (!window.location.pathname.includes('/auth/login')) {
+      window.location.href = '/auth/login';
+    }
+  }
+}
+
+// Export logout function for manual use
+export function logout(message?: string) {
+  return forceLogout(message);
+}
+
+// Helper function to get refresh token from multiple sources
+function getRefreshToken(): string | null {
+  try {
+    if (typeof window !== 'undefined') {
+      const cookieToken = getCookie('refresh_token');
+      if (cookieToken) return cookieToken;
+      
+      const localStorageToken = localStorage.getItem('refresh_token');
+      if (localStorageToken) return localStorageToken;
+    }
+    return null;
+  } catch (e) {
+    console.error('Error getting refresh token:', e);
+    return null;
+  }
+}
 
 export default api

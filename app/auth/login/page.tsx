@@ -14,9 +14,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Building2, Lock, User, AlertCircle } from "lucide-react";
+import { Building2, Lock, User, AlertCircle, Info } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuthMessage } from "@/hooks/useAuthMessage";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,6 +25,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const { message: authMessage, clearMessage } = useAuthMessage();
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -69,6 +71,16 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="animate-fadeIn delay-150">
+          {authMessage && (
+            <Alert
+              variant="default"
+              className="mb-4 border-l-4 border-blue-500 bg-blue-50"
+            >
+              <Info className="h-4 w-4" />
+              <AlertDescription>{authMessage}</AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert
               variant="destructive"

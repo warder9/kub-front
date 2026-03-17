@@ -99,6 +99,7 @@ import { toast } from "sonner"
 import { getCurrentUser, getCurrentCompany } from "@/lib/auth"
 import {
     getDocuments,
+    getDocumentsByDeal,
     getDocumentById,
     createDocumentFromClient,
     uploadDocument,
@@ -273,6 +274,7 @@ export default function DocumentsPage() {
     const [deals, setDeals] = useState<any[]>([])
     const [currentUser, setCurrentUser] = useState<any>(null)
     const [isReadOnly, setIsReadOnly] = useState(false)
+    const [selectedDealId, setSelectedDealId] = useState<number | null>(null)
 
     // ─── Create form state ──────────────────────────────────────
 
@@ -317,7 +319,92 @@ export default function DocumentsPage() {
         setLoading(true)
         try {
             const params: any = { page: currentPage, size }
-            const res = await getDocuments(params)
+            let res: any
+
+            // Always try deal-based approach first for safety
+            if (currentUser?.role === 'sales' || selectedDealId) {
+                // For sales users or when specific deal is selected, use deal-based approach
+                if (selectedDealId) {
+                    // If a specific deal is selected, get documents from that deal
+                    res = await getDocumentsByDeal(selectedDealId, params)
+                } else {
+                    // Get all deals for this sales user and fetch documents from each
+                    const { list_my_deals } = await import("@/src/api/deals.api")
+                    const dealsRes = await list_my_deals(undefined, { page: 1, size: 100 })
+                    const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
+                    
+                    if (userDeals.length === 0) {
+                        // No deals found, return empty result
+                        setDocuments([])
+                        setTotalDocuments(0)
+                        return
+                    }
+                    
+                    // Fetch documents from each deal and combine them
+                    const allDocuments: any[] = []
+                    let totalCount = 0
+                    
+                    for (const deal of userDeals) {
+                        try {
+                            const dealDocs = await getDocumentsByDeal(deal.id, { page: 1, size: 100 })
+                            const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
+                            allDocuments.push(...docs)
+                            totalCount += (dealDocs as any)?.total || docs.length
+                        } catch (err) {
+                            console.warn(`Failed to fetch documents for deal ${deal.id}:`, err)
+                        }
+                    }
+                    
+                    setDocuments(allDocuments)
+                    setTotalDocuments(totalCount)
+                    return
+                }
+            } else {
+                // For non-sales users without specific deal selection, try general endpoint first
+                // but with immediate fallback to deal-based approach
+                try {
+                    res = await getDocuments(params)
+                } catch (err: any) {
+                    // If we get a 403 error, fallback to deal-based approach
+                    if (err.message && (err.message.includes('Forbidden for sales') || err.response?.status === 403)) {
+                        console.log('403 error detected, switching to deal-based approach...')
+                        
+                        // Load user's deals and fetch documents from them
+                        const { list_my_deals } = await import("@/src/api/deals.api")
+                        const dealsRes = await list_my_deals(undefined, { page: 1, size: 100 })
+                        const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
+                        
+                        if (userDeals.length === 0) {
+                            setDocuments([])
+                            setTotalDocuments(0)
+                            return
+                        }
+                        
+                        // Fetch documents from each deal and combine them
+                        const allDocuments: any[] = []
+                        let totalCount = 0
+                        
+                        for (const deal of userDeals) {
+                            try {
+                                const dealDocs = await getDocumentsByDeal(deal.id, { page: 1, size: 100 })
+                                const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
+                                allDocuments.push(...docs)
+                                totalCount += (dealDocs as any)?.total || docs.length
+                            } catch (dealErr) {
+                                console.warn(`Failed to fetch documents for deal ${deal.id}:`, dealErr)
+                            }
+                        }
+                        
+                        setDocuments(allDocuments)
+                        setTotalDocuments(totalCount)
+                        return
+                    } else {
+                        // Re-throw other errors
+                        throw err
+                    }
+                }
+            }
+
             const docs = Array.isArray(res) ? res : (res as any)?.data || []
             const total = (res as any)?.total || docs.length
             setDocuments(docs)
@@ -328,7 +415,7 @@ export default function DocumentsPage() {
         } finally {
             setLoading(false)
         }
-    }, [currentPage, size])
+    }, [currentPage, size, currentUser?.role, selectedDealId])
 
     useEffect(() => {
         const user = getCurrentUser()
@@ -345,9 +432,9 @@ export default function DocumentsPage() {
                     lastName: "",
                     email: companyData.email,
                     phone: companyData.phone,
-                    role: "admin",
+                    role: "sales", // Default to sales to avoid permission issues
                     company_name: companyData.name,
-                    role_id: 30,
+                    role_id: 5, // Sales role ID
                     is_verified: true,
                     status: 'active'
                 };
@@ -365,6 +452,16 @@ export default function DocumentsPage() {
         setCurrentUser(user)
         const roleKey = getRoleKey(user.role_id)
         setIsReadOnly(roleKey === "control")
+        
+        // Debug user role information
+        console.log('Documents page - User info:', {
+            user,
+            role: user?.role,
+            role_id: user?.role_id,
+            roleKey,
+            isSales: user?.role === 'sales',
+            isReadOnly
+        })
 
         // Load clients
         const loadClients = async () => {
@@ -379,8 +476,16 @@ export default function DocumentsPage() {
         // Load deals
         const loadDeals = async () => {
             try {
-                const { list_deals } = await import("@/src/api/deals.api")
-                const res = await list_deals()
+                let res: any
+                if (user?.role === 'sales') {
+                    // Sales users can only see their own deals
+                    const { list_my_deals } = await import("@/src/api/deals.api")
+                    res = await list_my_deals()
+                } else {
+                    // Other users can see all deals
+                    const { list_deals } = await import("@/src/api/deals.api")
+                    res = await list_deals()
+                }
                 const data = res?.data || (Array.isArray(res) ? res : [])
                 setDeals(Array.isArray(data) ? data : [])
             } catch (e) { console.error("Error loading deals:", e) }
@@ -391,8 +496,10 @@ export default function DocumentsPage() {
     }, [router])
 
     useEffect(() => {
-        fetchDocuments()
-    }, [fetchDocuments])
+        if (currentUser) {
+            fetchDocuments()
+        }
+    }, [fetchDocuments, currentUser])
 
     const handlePageChange = (page: number) => {
         const params = new URLSearchParams(searchParams)
@@ -738,6 +845,37 @@ export default function DocumentsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Deal Filter for Sales Users */}
+            {currentUser?.role === 'sales' && (
+                <div className="mx-6 mb-6">
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1 max-w-sm">
+                            <Label htmlFor="deal-filter">Фильтр по сделке</Label>
+                            <ComboboxSelect
+                                value={selectedDealId || ""}
+                                onChange={(val) => setSelectedDealId(val ? Number(val) : null)}
+                                options={[
+                                    { value: "", label: "Все сделки" },
+                                    ...dealOptions
+                                ]}
+                                placeholder="Выберите сделку..."
+                                searchPlaceholder="Поиск сделки..."
+                                emptyText="Сделки не найдены"
+                            />
+                        </div>
+                        <div className="flex items-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => setSelectedDealId(null)}
+                                disabled={!selectedDealId}
+                            >
+                                Сбросить
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 mx-6">

@@ -15,6 +15,7 @@ export interface User {
   verified_at?: string
   telegram_chat_id?: number
   notify_tasks_telegram?: boolean
+  avatar?: string
 }
 
 export interface CreateUserRequest {

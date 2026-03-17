@@ -1,5 +1,6 @@
 import api, { setAuthToken, setRefreshToken } from './index'
 import { setCurrentUser, setCurrentCompany } from '@/lib/auth'
+import { tokenManager } from '@/lib/token-manager'
 import type * as Models from '../models/Auth.model'
 
 // Функция для преобразования данных пользователя с сервера в формат приложения
@@ -44,6 +45,8 @@ export async function login(payload: Models.Auth_Login_Request, params?: Record<
   try {
     if (data?.tokens?.access_token) {
       setAuthToken(data.tokens.access_token)
+      // Initialize proactive token refresh
+      tokenManager.scheduleTokenRefresh(data.tokens.access_token)
       console.log("Token set successfully");
     }
     if (data?.tokens?.refresh_token) {
@@ -80,8 +83,46 @@ export async function login(payload: Models.Auth_Login_Request, params?: Record<
 }
 
 export async function refresh_token(payload: Models.Auth_Refresh_token_Request, params?: Record<string, any>): Promise<any> {
-  const res = await api.post(`/auth/refresh`, payload)
-  return res.data
+  try {
+    const res = await api.post(`/auth/refresh`, payload)
+    const data = res.data
+    
+    console.log("Refresh token API response:", data);
+    
+    // Handle different response formats
+    let newAccessToken: string | null = null;
+    
+    if (data?.tokens?.access_token) {
+      setAuthToken(data.tokens.access_token)
+      newAccessToken = data.tokens.access_token;
+      console.log("New access token set successfully");
+    }
+    if (data?.tokens?.refresh_token) {
+      setRefreshToken(data.tokens.refresh_token)
+      console.log("New refresh token set successfully");
+    }
+    
+    // Handle direct token format (fallback)
+    if (data?.access_token && !data?.tokens?.access_token) {
+      setAuthToken(data.access_token)
+      newAccessToken = data.access_token;
+      console.log("New access token set successfully (direct format)");
+    }
+    if (data?.refresh_token && !data?.tokens?.refresh_token) {
+      setRefreshToken(data.refresh_token)
+      console.log("New refresh token set successfully (direct format)");
+    }
+    
+    // Schedule next proactive refresh if we got a new access token
+    if (newAccessToken) {
+      tokenManager.scheduleTokenRefresh(newAccessToken);
+    }
+    
+    return data
+  } catch (error) {
+    console.error('Refresh token failed:', error);
+    throw error;
+  }
 }
 
 export async function forgot_password(payload: Models.Auth_Forgot_password_Request, params?: Record<string, any>): Promise<any> {

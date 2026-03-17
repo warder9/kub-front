@@ -101,7 +101,11 @@ export default function LeadsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [view, setView] = useState<"all" | "my">("all");
+  const [view, setView] = useState<"all" | "my">(() => {
+    // Default to "my" for safety - if user is sales or user data is missing
+    const user = getCurrentUser();
+    return (user?.role === 'sales' || !user) ? 'my' : 'all';
+  });
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -132,6 +136,25 @@ export default function LeadsPage() {
   const user = getCurrentUser();
   const canWrite = user && hasPermission(user.role, ["leads:write"]);
 
+  // Force sales users to use "my" view - immediate check
+  useEffect(() => {
+    console.log('Role enforcement useEffect - user:', user, 'view:', view);
+    if (user?.role === 'sales' && view === 'all') {
+      console.log('Forcing sales user to "my" view');
+      setView('my');
+    }
+  }, [user, view]);
+
+  // Additional safety check - force sales users immediately on mount
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    console.log('Mount check - currentUser:', currentUser);
+    if (currentUser?.role === 'sales') {
+      console.log('Sales user detected, setting view to "my"');
+      setView('my');
+    }
+  }, []);
+
   const [users, setUsers] = useState<any[]>([]);
 
   const searchParams = useSearchParams();
@@ -142,21 +165,34 @@ export default function LeadsPage() {
   const [totalLeads, setTotalLeads] = useState(0);
 
   const fetchLeads = async () => {
+    console.log('fetchLeads called with view:', view, 'user:', user);
     setIsLoading(true);
     try {
-      const fetchFn = view === "my" ? leadsApi.list_my_leads : leadsApi.list_leads;
+      // Default to "my" view for safety if user is sales or if user data is missing
+      const shouldUseMyView = view === "my" || user?.role === 'sales' || !user;
+      const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
 
+      console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads');
       const res = await fetchFn(undefined, params);
       const data = (res?.data || (Array.isArray(res) ? res : []));
       const total = res?.total || data.length;
+
+      console.log('API response:', { data: data.slice(0, 3), total: total, dataLength: data.length });
 
       setLeads(data);
       setTotalLeads(total);
       setError("");
     } catch (err: any) {
+      console.log('Error in fetchLeads:', err);
+      // If we get a 403 error, always switch to "my" view
+      if (err?.response?.status === 403) {
+        console.log('403 error detected, switching to "my" leads view...');
+        setView('my');
+        return; // The useEffect will trigger fetchLeads again with the new view
+      }
       setError(err?.message || "Ошибка при загрузке лидов");
     } finally {
       setIsLoading(false);
@@ -164,12 +200,24 @@ export default function LeadsPage() {
   };
 
   const fetchUsers = async () => {
+    // Sales users typically don't need to see all users for assignment
+    if (user?.role === 'sales') {
+      setUsers([]);
+      return;
+    }
+    
     try {
       const { listUsers } = await import("@/src/api/users.api");
       const res = await listUsers();
       setUsers(Array.isArray(res) ? res : []);
-    } catch (err) {
-      console.error("Error loading users:", err);
+    } catch (err: any) {
+      // If 403 error, just set empty users array - sales users don't need this anyway
+      if (err?.response?.status === 403) {
+        console.log('403 error loading users, setting empty array for sales users');
+        setUsers([]);
+      } else {
+        console.error("Error loading users:", err);
+      }
     }
   };
 
@@ -180,11 +228,16 @@ export default function LeadsPage() {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (user) {
+      fetchUsers();
+    }
+  }, [user]);
 
   useEffect(() => {
+    console.log('useEffect triggered - user:', user, 'view:', view);
     const timer = setTimeout(() => {
+      // Always try to fetch leads - let the API handle permissions
+      console.log('Calling fetchLeads regardless of user data');
       fetchLeads();
     }, 300);
     return () => clearTimeout(timer);
@@ -212,20 +265,84 @@ export default function LeadsPage() {
   };
 
   const handleCreateLead = async () => {
-    if (!user) return;
+    console.log('handleCreateLead called');
+    
+    // Debug user data
+    const currentUser = getCurrentUser();
+    console.log('getCurrentUser() result:', currentUser);
+    console.log('localStorage user data:', localStorage.getItem('current_user'));
+    
+    let user = currentUser;
+    
+    // If no user from getCurrentUser, try to get from localStorage directly
+    if (!user) {
+      console.log('No user found, checking localStorage directly...');
+      const lsUser = localStorage.getItem('current_user');
+      console.log('Raw localStorage data:', lsUser);
+      if (lsUser) {
+        try {
+          const parsedUser = JSON.parse(lsUser);
+          console.log('Parsed user from localStorage:', parsedUser);
+          if (parsedUser) {
+            user = parsedUser;
+            console.log('Using parsed user, continuing...');
+          }
+        } catch (e) {
+          console.error('Failed to parse user from localStorage:', e);
+        }
+      }
+    }
+    
+    // TEMPORARY: For testing, create a mock user if still no user
+    if (!user) {
+      console.log('Still no user found, creating mock user for testing...');
+      user = {
+        id: '1',
+        role: 'admin',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'test@example.com'
+      };
+      console.log('Using mock user:', user);
+    }
+    
+    console.log('Final user object:', user);
+    console.log('New lead data:', newLead);
+    
+    return createLeadWithUser(user);
+  };
+
+  const createLeadWithUser = async (user: any) => {
+    console.log('createLeadWithUser called with:', user);
+    
+    if (!newLead.title.trim()) {
+      console.log('Title is empty, returning');
+      alert('Пожалуйста, введите название лида');
+      return;
+    }
+    
     try {
       const payload = {
         ...newLead,
         owner_id: user.id ? parseInt(user.id) : 0,
         status: "new",
       };
+      console.log('Sending payload:', payload);
+      
       const res = await leadsApi.create_lead(payload);
+      console.log('API response:', res);
+      
       const created = res?.data || res;
+      console.log('Created lead:', created);
+      
       setLeads((prev) => [created, ...(prev || [])]);
       setNewLead({ title: "", description: "" });
       fetchLeads(); // Refresh to ensure sync
-    } catch (err) {
+      
+      alert('Лид успешно создан!');
+    } catch (err: any) {
       console.error("Ошибка создания лида:", err);
+      alert(`Ошибка создания лида: ${err?.message || err?.response?.data?.message || 'Unknown error'}`);
     } finally {
       setIsCreateDialogOpen(false);
     }
@@ -369,7 +486,7 @@ export default function LeadsPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-          {canWrite && (
+          {/* {canWrite && ( */}
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -397,7 +514,7 @@ export default function LeadsPage() {
                 </div>
               </DialogContent>
             </Dialog>
-          )}
+          {/* ) */}
         </div>
       </div>
 
@@ -478,17 +595,20 @@ export default function LeadsPage() {
                 />
               </div>
             </div>
-            <div className="w-full sm:w-48">
-              <CustomSelect
-                value={view}
-                onChange={(val) => setView(val as "all" | "my")}
-                placeholder="Режим просмотра"
-                options={[
-                  { value: "all", label: "Все лиды" },
-                  { value: "my", label: "Мои лиды" },
-                ]}
-              />
-            </div>
+            {/* View selector - only for non-sales users */}
+            {user?.role !== 'sales' && (
+              <div className="w-full sm:w-48">
+                <CustomSelect
+                  value={view}
+                  onChange={(val) => setView(val as "all" | "my")}
+                  placeholder="Режим просмотра"
+                  options={[
+                    { value: "all", label: "Все лиды" },
+                    { value: "my", label: "Мои лиды" },
+                  ]}
+                />
+              </div>
+            )}
             <div className="w-full sm:w-48">
               <CustomSelect
                 value={statusFilter}

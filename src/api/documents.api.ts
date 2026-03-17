@@ -8,6 +8,11 @@ export async function getDocuments(params?: { page?: number; size?: number; sear
   return res.data
 }
 
+export async function getDocumentsByDeal(dealId: number, params?: { page?: number; size?: number; search?: string }): Promise<Models.Document[] | { data: Models.Document[]; total: number }> {
+  const res = await api.get(`/documents/deal/${dealId}`, { params })
+  return res.data
+}
+
 export async function getDocumentById(id: number): Promise<Models.Document> {
   const res = await api.get(`/documents/${id}`)
   return res.data
