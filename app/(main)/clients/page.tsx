@@ -62,8 +62,9 @@ import {
   Users,
   CreditCard,
 } from "lucide-react";
-import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
 import * as ClientAPI from "@/src/api/clients.api";
+import * as AuthAPI from "@/src/api/auth.api";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { Separator } from "@/components/ui/separator";
@@ -154,11 +155,14 @@ export default function ClientsPage() {
   const [clientView, setClientView] = useState<"all" | "my">(() => {
     // Initialize with correct view based on user role
     const currentUser = getCurrentUser();
-    return currentUser?.role === 'sales' ? 'my' : 'all';
+    return (currentUser?.role === 'sales' || currentUser?.role_id === 5) ? 'my' : 'all';
   });
   
+  // State for fresh user data from API
+  const [freshUserData, setFreshUserData] = useState<any>(null);
+  
   // Get fresh user data for each render
-  const user = getCurrentUser();
+  const user = freshUserData || getCurrentUser();
   const canCreate = true; // Temporary override for testing
   const canEdit = true; // Temporary override for testing
   const canDelete = user && hasPermission(user.role, ["clients:write"]);
@@ -174,11 +178,54 @@ export default function ClientsPage() {
     });
   }, [user, canCreate, canEdit, canDelete]);
 
+  // Fetch fresh user data on mount
+  useEffect(() => {
+    const fetchFreshUserData = async () => {
+      try {
+        console.log('Fetching fresh user data...');
+        const userData = await AuthAPI.getMe();
+        console.log('Fresh user data received:', userData);
+        
+        // Transform API response to match User interface
+        const transformedUser = {
+          id: String(userData.id),
+          firstName: userData.company_name || userData.email?.split('@')[0] || '',
+          lastName: '',
+          email: userData.email,
+          phone: userData.phone,
+          role: userData.role_id === 40 ? 'management' : 
+                userData.role_id === 5 ? 'sales' : 
+                userData.role_id === 10 ? 'operations' : 
+                userData.role_id === 20 ? 'control' : 
+                userData.role_id === 30 ? 'admin' : 'user',
+          role_id: userData.role_id,
+          company_name: userData.company_name,
+          bin_iin: userData.bin_iin,
+          is_verified: userData.is_verified,
+          verified_at: userData.verified_at,
+          telegram_chat_id: userData.telegram_chat_id,
+          notify_tasks_telegram: userData.notify_tasks_telegram,
+          status: 'active'
+        };
+        
+        console.log('Transformed user data:', transformedUser);
+        setFreshUserData(transformedUser);
+        
+        // Update localStorage with fresh data
+        setCurrentUser(transformedUser);
+      } catch (error) {
+        console.error('Failed to fetch fresh user data:', error);
+      }
+    };
+    
+    fetchFreshUserData();
+  }, []); // Run once on mount
+
   const fetchClients = async () => {
     console.log('=== FETCH CLIENTS DEBUG ===');
     console.log('fetchClients called with:', { 
       userRole: user?.role, 
-      clientView, 
+      clientView,
       currentPage,
       searchTerm,
       isLoading 
@@ -192,21 +239,23 @@ export default function ClientsPage() {
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
-      let effectiveView = currentUser?.role === 'sales' ? 'my' : clientView;
+      let effectiveView = (currentUser?.role === 'sales' || currentUser?.role_id === 5) ? 'my' : clientView;
       
       // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
-      if (currentUser?.role === 'sales') {
+      if (currentUser?.role === 'sales' || currentUser?.role_id === 5) {
         effectiveView = 'my';
         console.log('SAFEGUARD: Forced to my view for sales user');
       }
       
       console.log('fetchClients API call:', { 
         userRole: currentUser?.role, 
+        userId: currentUser?.role_id,
         clientView, 
         effectiveView,
         endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
         params,
         'currentUser?.role === "sales"': currentUser?.role === 'sales',
+        'currentUser?.role_id === 5': currentUser?.role_id === 5,
         'effectiveView === "all"': effectiveView === "all",
         'calling listClients?': effectiveView === "all"
       });
@@ -218,10 +267,12 @@ export default function ClientsPage() {
         willCall: currentUser?.role === 'sales' ? 'listMyClients' : 'listClients'
       });
       
-      // More robust role check - handle different formats
-      const isSalesRole = currentUser?.role === 'sales' || currentUser?.role === 'Sales' || currentUser?.role?.toString().toLowerCase() === 'sales';
+      // More robust role check - handle different formats and undefined roles
+      const userRole = currentUser?.role;
+      const userId = currentUser?.role_id;
+      const isSalesRole = (!userRole && !userId) || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales' || userId === 5;
       
-      console.log('Final role check:', { isSalesRole, userRole: currentUser?.role });
+      console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
       
       // AGGRESSIVE SAFEGUARD: If we get 403 on listClients, fallback to listMyClients
       let res;
@@ -306,7 +357,7 @@ export default function ClientsPage() {
     const currentUser = getCurrentUser();
     console.log('Initial user check:', currentUser);
     
-    if (currentUser?.role === 'sales' && clientView === 'all') {
+    if ((currentUser?.role === 'sales' || currentUser?.role_id === 5) && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
@@ -316,8 +367,8 @@ useEffect(() => {
     console.log('=== USEEFFECT 1: User/Role Change ===');
     console.log('User:', user);
     console.log('Client view:', clientView);
-    if (user?.role === 'sales' && clientView === 'all') {
-      console.log('Sales user with all view - switching to my');
+    if ((user?.role === 'sales' || user?.role_id === 5) && clientView === 'all') {
+      console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
   }, [user]); // Remove clientView from dependencies to prevent infinite loop

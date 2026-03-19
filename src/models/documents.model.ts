@@ -1,12 +1,19 @@
 export type DocType =
-  | "contract_full"
-  | "contract_50_50"
-  | "personal_data_consent"
+  | "contract_paid_full_ru"
+  | "contract_paid_50_50_ru"
+  | "contract_free_ru"
   | "refund_application"
   | "pause_application"
-  | "personal_data_excel"
-  | "refund_receipt_full"
-  | "refund_receipt_partial";
+  | "avr_kub_group"
+  | "receipt_refund_full"
+  | "receipt_refund_partial"
+  | "cancel_appointment"
+  | "documents_handover_act"
+  | "visa_questionnaire"
+  | "termination_transfer"
+  | "termination_waiver"
+  | "contract_language_courses"
+  | "addendum_korea";
 
 export type DocStatus = "draft" | "under_review" | "approved" | "returned" | "signed";
 

@@ -69,6 +69,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
 import * as dealsApi from "@/src/api/deals.api";
@@ -104,7 +105,8 @@ export default function LeadsPage() {
   const [view, setView] = useState<"all" | "my">(() => {
     // Default to "my" for safety - if user is sales or user data is missing
     const user = getCurrentUser();
-    return (user?.role === 'sales' || !user) ? 'my' : 'all';
+    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    return (userRole === 'sales' || !user) ? 'my' : 'all';
   });
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -133,14 +135,48 @@ export default function LeadsPage() {
   });
   const [statusChangeData, setStatusChangeData] = useState({ to: "", comment: "" });
 
-  const user = getCurrentUser();
-  const canWrite = user && hasPermission(user.role, ["leads:write"]);
+  const [user, setUser] = useState<any>(null);
+  const [canWrite, setCanWrite] = useState(false);
+
+  // Helper function to map role_id to role name (same as sidebar)
+  function getRoleFromId(roleId: number): string {
+    const roleMapping: Record<number, string> = {
+      40: 'management',
+      30: 'admin',
+      20: 'control',
+      10: 'sales',
+      5: 'user'
+    }
+    return roleMapping[roleId] || 'user'
+  }
+
+  // Fetch user data like sidebar does
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await getMe();
+        setUser(userData);
+        // Use role_id and map it to role name like the sidebar does
+        const userRole = getRoleFromId(userData.role_id);
+        const hasWriteAccess = userData && hasPermission(userRole, ["leads:write"]);
+        setCanWrite(hasWriteAccess);
+      } catch (error) {
+        console.error("Failed to fetch user data", error);
+        // Fallback to localStorage
+        const localUser = getCurrentUser();
+        setUser(localUser);
+        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        setCanWrite(!!(localUser && hasPermission(userRole, ["leads:write"])));
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   // Force sales users to use "my" view - immediate check
   useEffect(() => {
-    console.log('Role enforcement useEffect - user:', user, 'view:', view);
-    if (user?.role === 'sales' && view === 'all') {
-      console.log('Forcing sales user to "my" view');
+    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    if (userRole === 'sales' && view === 'all') {
       setView('my');
     }
   }, [user, view]);
@@ -148,9 +184,8 @@ export default function LeadsPage() {
   // Additional safety check - force sales users immediately on mount
   useEffect(() => {
     const currentUser = getCurrentUser();
-    console.log('Mount check - currentUser:', currentUser);
-    if (currentUser?.role === 'sales') {
-      console.log('Sales user detected, setting view to "my"');
+    const userRole = currentUser ? getRoleFromId(currentUser.role_id || 0) : undefined;
+    if (userRole === 'sales') {
       setView('my');
     }
   }, []);
@@ -169,7 +204,8 @@ export default function LeadsPage() {
     setIsLoading(true);
     try {
       // Default to "my" view for safety if user is sales or if user data is missing
-      const shouldUseMyView = view === "my" || user?.role === 'sales' || !user;
+      const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+      const shouldUseMyView = view === "my" || userRole === 'sales' || !user;
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, limit };
       if (searchTerm) params.search = searchTerm;
@@ -201,7 +237,8 @@ export default function LeadsPage() {
 
   const fetchUsers = async () => {
     // Sales users typically don't need to see all users for assignment
-    if (user?.role === 'sales') {
+    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    if (userRole === 'sales') {
       setUsers([]);
       return;
     }
@@ -486,7 +523,7 @@ export default function LeadsPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-          {/* {canWrite && ( */}
+          {canWrite && (
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -514,7 +551,7 @@ export default function LeadsPage() {
                 </div>
               </DialogContent>
             </Dialog>
-          {/* ) */}
+          )}
         </div>
       </div>
 
@@ -596,7 +633,7 @@ export default function LeadsPage() {
               </div>
             </div>
             {/* View selector - only for non-sales users */}
-            {user?.role !== 'sales' && (
+            {user && getRoleFromId(user.role_id || 0) !== 'sales' && (
               <div className="w-full sm:w-48">
                 <CustomSelect
                   value={view}
@@ -666,9 +703,11 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(lead)} title="Редактировать">
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {canWrite && (
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(lead)} title="Редактировать">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => openAssignDialog(lead)} title="Назначить">
                             <UserPlus className="h-4 w-4" />
                           </Button>

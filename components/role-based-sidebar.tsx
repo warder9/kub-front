@@ -149,8 +149,7 @@ export function RoleBasedSidebar() {
         const [userData, rolesData] = await Promise.all([
           getMe(),
           RolesAPI.listRoles({ limit: 100 }).catch((err) => {
-            console.error('Roles API error:', err);
-            console.log('Roles API response:', err.response);
+            console.warn('Roles API not accessible, using fallback role mapping:', err);
             return { data: [] };
           })
         ]);

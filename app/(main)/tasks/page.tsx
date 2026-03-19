@@ -466,6 +466,11 @@ export default function TasksPage() {
       return
     }
 
+    if (!formData.entity_type.trim()) {
+      toast.error("Тип сущности обязателен")
+      return
+    }
+
     const payload = {
       title: formData.title,
       description: formData.description,
@@ -512,7 +517,13 @@ export default function TasksPage() {
   const handleChangeStatus = async () => {
     if (!statusTask || !newStatus) return
     try {
-      await change_task_status({ status: newStatus }, { id: statusTask.id })
+      console.log('Changing task status:', {
+        taskId: statusTask.id,
+        currentStatus: statusTask.status,
+        newStatus: newStatus,
+        payload: { to: newStatus }
+      })
+      await change_task_status({ to: newStatus }, { id: statusTask.id })
       toast.success("Статус обновлен")
       await fetchTasks()
     } catch (err: any) {
@@ -880,7 +891,7 @@ export default function TasksPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Тип сущности</Label>
+              <Label>Тип сущности <span className="text-red-500">*</span></Label>
               <CustomSelect
                 value={formData.entity_type}
                 onChange={(val) => setFormData({ ...formData, entity_type: val, entity_id: "" })}
@@ -927,7 +938,7 @@ export default function TasksPage() {
             <DialogClose asChild>
               <Button variant="ghost">Отмена</Button>
             </DialogClose>
-            <Button onClick={handleSubmitForm} disabled={!formData.title.trim()}>
+            <Button onClick={handleSubmitForm} disabled={!formData.title.trim() || !formData.entity_type.trim()}>
               {selectedTask ? "Обновить" : "Создать"}
             </Button>
           </DialogFooter>

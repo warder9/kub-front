@@ -25,7 +25,8 @@ export type Tasks_Update_task_Request = {
 }
 
 export type Tasks_Change_task_status_Request = {
-  status: string
+  to: string
+  comment?: string
 }
 
 export type Tasks_Assign_task_Request = {

@@ -96,7 +96,8 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, setCurrentUser } from "@/lib/auth"
+import * as AuthAPI from "@/src/api/auth.api"
 import {
     getDocuments,
     getDocumentsByDeal,
@@ -115,20 +116,27 @@ import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/docu
 // ─── Constants ───────────────────────────────────────────────────
 
 const docTypeLabels: Record<string, string> = {
-    contract_full: "Договор (полный)",
-    contract_50_50: "Договор (50/50)",
-    personal_data_consent: "Согласие на обработку ПД",
+    contract_paid_full_ru: "Договор полной оплаты (рус)",
+    contract_paid_50_50_ru: "Договор 50/50 (рус)",
+    contract_free_ru: "Договор (бесплатный, рус)",
     refund_application: "Заявление на возврат",
     pause_application: "Заявление на паузу",
-    personal_data_excel: "ПД (Excel)",
-    refund_receipt_full: "Чек на возврат (полный)",
-    refund_receipt_partial: "Чек на возврат (частичный)",
+    avr_kub_group: "АВР KUB Group",
+    receipt_refund_full: "Расписка о полном возврате",
+    receipt_refund_partial: "Расписка о частичном возврате",
+    cancel_appointment: "Заявление на отмену записи",
+    documents_handover_act: "Акт приёма-передачи документов",
+    visa_questionnaire: "Визовый опросник",
+    termination_transfer: "Соглашение о расторжении с передачей",
+    termination_waiver: "Соглашение о расторжении с отказом от претензий",
+    contract_language_courses: "Договор на языковые курсы",
+    addendum_korea: "Дополнительное соглашение (Корея)",
 }
 
 // Only main types for creation
 const creatableDocTypes: { value: string; label: string }[] = [
-    { value: "contract_full", label: "Договор (полный)" },
-    { value: "contract_50_50", label: "Договор (50/50)" },
+    { value: "contract_paid_full_ru", label: "Договор полной оплаты (рус)" },
+    { value: "contract_paid_50_50_ru", label: "Договор 50/50 (рус)" },
     { value: "refund_application", label: "Заявление на возврат" },
     { value: "pause_application", label: "Заявление на паузу" },
 ]
@@ -164,14 +172,14 @@ const signStatusColors: Record<string, string> = {
 // Extra keys by doc type
 function getExtraDefaults(docType: string): Record<string, any> {
     switch (docType) {
-        case "contract_full":
-            return { TOTAL_AMOUNT_NUM: "", TOTAL_AMOUNT_TEXT: "", CONTRACT_DATE: "" }
-        case "contract_50_50":
-            return { TOTAL_AMOUNT_NUM: "", TOTAL_AMOUNT_TEXT: "", CONTRACT_DATE: "", FIRST_PAYMENT: "", SECOND_PAYMENT: "" }
+        case "contract_paid_full_ru":
+            return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "" }
+        case "contract_paid_50_50_ru":
+            return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "", PREPAY_AMOUNT_NUM: "", PREPAY_AMOUNT_TEXT: "" }
         case "refund_application":
-            return { REFUND_REASON_CODE: "", REFUND_AMOUNT: "", REFUND_DATE: "" }
+            return { reason_code: "", REFUND_REASON_TEXT: "", REFUND_AMOUNT_NUM: "", REFUND_AMOUNT_TEXT: "" }
         case "pause_application":
-            return { PAUSE_START_DATE: "", PAUSE_END_DATE: "", PAUSE_REASON: "" }
+            return { reason_code: "", PAUSE_REASON_TEXT: "", PAUSE_FROM_DATE: "", PAUSE_TO_DATE: "" }
         default:
             return {}
     }
@@ -272,9 +280,57 @@ export default function DocumentsPage() {
 
     const [clients, setClients] = useState<any[]>([])
     const [deals, setDeals] = useState<any[]>([])
-    const [currentUser, setCurrentUser] = useState<any>(null)
+    const [currentUser, setCurrentUserState] = useState<any>(null)
+    const [freshUserData, setFreshUserData] = useState<any>(null)
     const [isReadOnly, setIsReadOnly] = useState(false)
     const [selectedDealId, setSelectedDealId] = useState<number | null>(null)
+    
+    // Get fresh user data or fallback to state
+    const user = freshUserData || currentUser;
+    
+    // Fetch fresh user data on mount
+    useEffect(() => {
+        const fetchFreshUserData = async () => {
+            try {
+                console.log('Fetching fresh user data for documents page...');
+                const userData = await AuthAPI.getMe();
+                console.log('Fresh user data received in documents:', userData);
+                
+                // Transform API response to match User interface
+                const transformedUser = {
+                    id: String(userData.id),
+                    firstName: userData.company_name || userData.email?.split('@')[0] || '',
+                    lastName: '',
+                    email: userData.email,
+                    phone: userData.phone,
+                    role: userData.role_id === 40 ? 'management' : 
+                          userData.role_id === 5 ? 'sales' : 
+                          userData.role_id === 10 ? 'operations' : 
+                          userData.role_id === 20 ? 'control' : 
+                          userData.role_id === 30 ? 'admin' : 'user',
+                    role_id: userData.role_id,
+                    company_name: userData.company_name,
+                    bin_iin: userData.bin_iin,
+                    is_verified: userData.is_verified,
+                    verified_at: userData.verified_at,
+                    telegram_chat_id: userData.telegram_chat_id,
+                    notify_tasks_telegram: userData.notify_tasks_telegram,
+                    status: 'active'
+                };
+                
+                console.log('Transformed user data in documents:', transformedUser);
+                setFreshUserData(transformedUser);
+                
+                // Update localStorage with fresh data
+                setCurrentUser(transformedUser);
+                setCurrentUserState(transformedUser);
+            } catch (error) {
+                console.error('Failed to fetch fresh user data in documents:', error);
+            }
+        };
+        
+        fetchFreshUserData();
+    }, []); // Run once on mount
 
     // ─── Create form state ──────────────────────────────────────
 
@@ -282,7 +338,7 @@ export default function DocumentsPage() {
     const [createForm, setCreateForm] = useState({
         client_id: "",
         deal_id: "",
-        doc_type: "contract_full" as string,
+        doc_type: "contract_paid_full_ru" as string,
         extra: {} as Record<string, any>,
     })
 
@@ -319,187 +375,25 @@ export default function DocumentsPage() {
         setLoading(true)
         try {
             const params: any = { page: currentPage, size }
-            let res: any
-
-            // Always try deal-based approach first for safety
-            if (currentUser?.role === 'sales' || selectedDealId) {
-                // For sales users or when specific deal is selected, use deal-based approach
-                if (selectedDealId) {
-                    // If a specific deal is selected, get documents from that deal
-                    res = await getDocumentsByDeal(selectedDealId, params)
-                } else {
-                    // Get all deals for this sales user and fetch documents from each
-                    const { list_my_deals } = await import("@/src/api/deals.api")
-                    const dealsRes = await list_my_deals(undefined, { page: 1, size: 100 })
-                    const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
-                    
-                    if (userDeals.length === 0) {
-                        // No deals found, return empty result
-                        setDocuments([])
-                        setTotalDocuments(0)
-                        return
-                    }
-                    
-                    // Fetch documents from each deal and combine them
-                    const allDocuments: any[] = []
-                    let totalCount = 0
-                    
-                    for (const deal of userDeals) {
-                        try {
-                            const dealDocs = await getDocumentsByDeal(deal.id, { page: 1, size: 100 })
-                            const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
-                            allDocuments.push(...docs)
-                            totalCount += (dealDocs as any)?.total || docs.length
-                        } catch (err) {
-                            console.warn(`Failed to fetch documents for deal ${deal.id}:`, err)
-                        }
-                    }
-                    
-                    setDocuments(allDocuments)
-                    setTotalDocuments(totalCount)
-                    return
-                }
-            } else {
-                // For non-sales users without specific deal selection, try general endpoint first
-                // but with immediate fallback to deal-based approach
-                try {
-                    res = await getDocuments(params)
-                } catch (err: any) {
-                    // If we get a 403 error, fallback to deal-based approach
-                    if (err.message && (err.message.includes('Forbidden for sales') || err.response?.status === 403)) {
-                        console.log('403 error detected, switching to deal-based approach...')
-                        
-                        // Load user's deals and fetch documents from them
-                        const { list_my_deals } = await import("@/src/api/deals.api")
-                        const dealsRes = await list_my_deals(undefined, { page: 1, size: 100 })
-                        const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
-                        
-                        if (userDeals.length === 0) {
-                            setDocuments([])
-                            setTotalDocuments(0)
-                            return
-                        }
-                        
-                        // Fetch documents from each deal and combine them
-                        const allDocuments: any[] = []
-                        let totalCount = 0
-                        
-                        for (const deal of userDeals) {
-                            try {
-                                const dealDocs = await getDocumentsByDeal(deal.id, { page: 1, size: 100 })
-                                const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
-                                allDocuments.push(...docs)
-                                totalCount += (dealDocs as any)?.total || docs.length
-                            } catch (dealErr) {
-                                console.warn(`Failed to fetch documents for deal ${deal.id}:`, dealErr)
-                            }
-                        }
-                        
-                        setDocuments(allDocuments)
-                        setTotalDocuments(totalCount)
-                        return
-                    } else {
-                        // Re-throw other errors
-                        throw err
-                    }
-                }
-            }
-
-            const docs = Array.isArray(res) ? res : (res as any)?.data || []
-            const total = (res as any)?.total || docs.length
-            setDocuments(docs)
-            setTotalDocuments(total)
+            const res = await getDocuments(params)
+            const data = Array.isArray(res) ? res : (res as any)?.data || []
+            setDocuments(data)
+            setTotalDocuments((res as any)?.total || data.length)
         } catch (err: any) {
             console.error("Error loading documents:", err)
             toast.error(err?.message || "Ошибка при загрузке документов")
+            setDocuments([])
+            setTotalDocuments(0)
         } finally {
             setLoading(false)
         }
-    }, [currentPage, size, currentUser?.role, selectedDealId])
+    }, [currentPage, size])
 
     useEffect(() => {
-        const user = getCurrentUser()
-        const companyData = getCurrentCompany()
-        
-        // Temporary fix: if user data is missing but token exists, try to get user data
-        if (!user) {
-            const token = localStorage.getItem("auth_token");
-            if (token && companyData) {
-                // Create minimal user data from company data
-                const tempUser = {
-                    id: companyData.id,
-                    firstName: companyData.name,
-                    lastName: "",
-                    email: companyData.email,
-                    phone: companyData.phone,
-                    role: "sales", // Default to sales to avoid permission issues
-                    company_name: companyData.name,
-                    role_id: 5, // Sales role ID
-                    is_verified: true,
-                    status: 'active'
-                };
-                setCurrentUser(tempUser);
-                console.log("Using temporary user data in documents:", tempUser);
-                return;
-            }
-        }
-        
-        if (!user) {
-            console.log("User data missing in documents, but continuing anyway for testing");
-            return
-        }
-        
-        setCurrentUser(user)
-        const roleKey = getRoleKey(user.role_id)
-        setIsReadOnly(roleKey === "control")
-        
-        // Debug user role information
-        console.log('Documents page - User info:', {
-            user,
-            role: user?.role,
-            role_id: user?.role_id,
-            roleKey,
-            isSales: user?.role === 'sales',
-            isReadOnly
-        })
-
-        // Load clients
-        const loadClients = async () => {
-            try {
-                const { listClients } = await import("@/src/api/clients.api")
-                const res = await listClients()
-                const data = Array.isArray(res) ? res : (res as any)?.data || []
-                setClients(Array.isArray(data) ? data : [])
-            } catch (e) { console.error("Error loading clients:", e) }
-        }
-
-        // Load deals
-        const loadDeals = async () => {
-            try {
-                let res: any
-                if (user?.role === 'sales') {
-                    // Sales users can only see their own deals
-                    const { list_my_deals } = await import("@/src/api/deals.api")
-                    res = await list_my_deals()
-                } else {
-                    // Other users can see all deals
-                    const { list_deals } = await import("@/src/api/deals.api")
-                    res = await list_deals()
-                }
-                const data = res?.data || (Array.isArray(res) ? res : [])
-                setDeals(Array.isArray(data) ? data : [])
-            } catch (e) { console.error("Error loading deals:", e) }
-        }
-
-        loadClients()
-        loadDeals()
-    }, [router])
-
-    useEffect(() => {
-        if (currentUser) {
+        if (freshUserData) {
             fetchDocuments()
         }
-    }, [fetchDocuments, currentUser])
+    }, [fetchDocuments, freshUserData])
 
     const handlePageChange = (page: number) => {
         const params = new URLSearchParams(searchParams)
@@ -513,8 +407,8 @@ export default function DocumentsPage() {
         setCreateForm({
             client_id: "",
             deal_id: "",
-            doc_type: "contract_full",
-            extra: getExtraDefaults("contract_full"),
+            doc_type: "contract_paid_full_ru",
+            extra: getExtraDefaults("contract_paid_full_ru"),
         })
         setIsCreateOpen(true)
     }
@@ -847,7 +741,7 @@ export default function DocumentsPage() {
             </div>
 
             {/* Deal Filter for Sales Users */}
-            {currentUser?.role === 'sales' && (
+            {(currentUser?.role === 'sales' || currentUser?.role_id === 5) && (
                 <div className="mx-6 mb-6">
                     <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-sm">

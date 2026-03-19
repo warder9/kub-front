@@ -64,7 +64,8 @@ import {
   ChevronsUpDown,
   Check,
 } from "lucide-react";
-import { getCurrentUser, getCurrentCompany } from "@/lib/auth";
+import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth";
+import { getMe } from "@/src/api/auth.api";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -97,6 +98,7 @@ export default function DealsPage() {
   const [error, setError] = useState("");
   const [user, setUser] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
+  const [canWrite, setCanWrite] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -129,6 +131,41 @@ export default function DealsPage() {
     currency: "KZT",
     status: "new",
   });
+
+  // Helper function to map role_id to role name (same as sidebar)
+  function getRoleFromId(roleId: number): string {
+    const roleMapping: Record<number, string> = {
+      40: 'management',
+      30: 'admin',
+      20: 'control',
+      10: 'sales',
+      5: 'user'
+    }
+    return roleMapping[roleId] || 'user'
+  }
+
+  // Fetch user data like sidebar does
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await getMe();
+        setUser(userData);
+        // Use role_id and map it to role name like the sidebar does
+        const userRole = getRoleFromId(userData.role_id);
+        const hasWriteAccess = userData && hasPermission(userRole, ["deals:write"]);
+        setCanWrite(hasWriteAccess);
+      } catch (error) {
+        console.error("Failed to fetch user data", error);
+        // Fallback to localStorage
+        const localUser = getCurrentUser();
+        setUser(localUser);
+        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        setCanWrite(!!(localUser && hasPermission(userRole, ["deals:write"])));
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const [statusUpdate, setStatusUpdate] = useState({
     to: "",
@@ -289,20 +326,26 @@ export default function DealsPage() {
   useEffect(() => {
     const loadMeta = async () => {
       try {
-        const userData = getCurrentUser();
+        console.log('=== LOAD META START ===');
+        let userData = getCurrentUser();
         const companyData = getCurrentCompany();
+        
+        console.log('loadMeta - userData:', userData);
+        console.log('loadMeta - companyData:', companyData);
 
         // Temporary fix: if user data is missing but token exists, try to get user data
         if (!userData) {
+          console.log('User data is null, checking for token...');
           const token = localStorage.getItem("auth_token");
+          console.log('Token exists:', !!token);
           if (token && companyData) {
             // Create minimal user data from company data
             const tempUser = {
-              id: companyData.id,
+              id: companyData.id.toString(),
               firstName: companyData.name,
               lastName: "",
-              email: companyData.email,
-              phone: companyData.phone,
+              email: companyData.email || '',
+              phone: companyData.phone || '',
               role: "sales", // Default to sales for safety - will be overridden by actual user data
               company_name: companyData.name,
               role_id: 30,
@@ -311,7 +354,7 @@ export default function DealsPage() {
             };
             setUser(tempUser);
             console.log("Using temporary user data (defaulted to sales):", tempUser);
-            return;
+            userData = tempUser; // Use this data for API calls
           }
         }
 
@@ -321,18 +364,50 @@ export default function DealsPage() {
           return;
         }
 
+        console.log("User data found, proceeding with API calls...");
         setUser(userData);
         setCompany(companyData);
 
         // Load clients (for dropdown)
         try {
-          const res = userData.role === "admin" || userData.role === "manager"
-            ? await ClientAPI.listClients()
-            : await ClientAPI.listMyClients();
+          // Apply same safety fix: default to listMyClients for sales users or undefined roles
+          const userRole = userData?.role;
+          const isSalesRole = !userRole || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales';
+          
+          console.log('Loading clients for user:', { userRole, isSalesRole });
+          
+          const res = isSalesRole
+            ? await ClientAPI.listMyClients()
+            : await ClientAPI.listClients();
+          console.log('Clients API response:', res);
           const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
           setClients(Array.isArray(clientsData) ? clientsData : []);
-        } catch (err) {
+          console.log('Clients loaded:', clientsData.length);
+        } catch (err: any) {
           console.error("Error loading clients:", err);
+          console.error("Client error details:", {
+            message: err?.message,
+            status: err?.response?.status,
+            statusText: err?.response?.statusText,
+            data: err?.response?.data
+          });
+          // Fallback to listMyClients if listClients fails
+          try {
+            console.log('Falling back to listMyClients');
+            const res = await ClientAPI.listMyClients();
+            console.log('Fallback clients API response:', res);
+            const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
+            setClients(Array.isArray(clientsData) ? clientsData : []);
+            console.log('Clients loaded via fallback:', clientsData.length);
+          } catch (fallbackErr: any) {
+            console.error("Fallback also failed:", fallbackErr);
+            console.error("Fallback error details:", {
+              message: fallbackErr?.message,
+              status: fallbackErr?.response?.status,
+              statusText: fallbackErr?.response?.statusText,
+              data: fallbackErr?.response?.data
+            });
+          }
         }
 
         // Load leads (for dropdown)
@@ -345,16 +420,26 @@ export default function DealsPage() {
           console.log('Deals page - loading leads for user:', currentUser?.role);
           console.log('Current user object:', currentUser);
           
-          // AGGRESSIVE SAFEGUARD: Always use list_my_leads for sales users
+          // Use list_my_leads for non-admin/manager users, with fallback for 403 errors
           let leadsRes;
-          if (currentUser?.role === 'sales') {
-            console.log('SAFEGUARD: Using list_my_leads for sales user');
+          if (currentUser?.role === 'admin' || currentUser?.role === 'manager') {
+            try {
+              console.log('Attempting to use list_leads for admin/manager user');
+              leadsRes = await list_leads();
+              console.log('list_leads response:', leadsRes);
+            } catch (leadsError: any) {
+              if (leadsError?.response?.status === 403) {
+                console.log('list_leads returned 403, falling back to list_my_leads for restricted user');
+                leadsRes = await list_my_leads();
+                console.log('Fallback list_my_leads response:', leadsRes);
+              } else {
+                throw leadsError;
+              }
+            }
+          } else {
+            console.log('Using list_my_leads for non-admin/manager user (sales/restricted)');
             leadsRes = await list_my_leads();
             console.log('list_my_leads response:', leadsRes);
-          } else {
-            console.log('Using list_leads for non-sales user');
-            leadsRes = await list_leads();
-            console.log('list_leads response:', leadsRes);
           }
             
           const leadsData = leadsRes?.data || leadsRes || [];
@@ -369,14 +454,49 @@ export default function DealsPage() {
           console.error("Error loading leads:", err);
         }
 
-        // Load users (for responsible)
-        try {
-          const { listUsers } = await import("@/src/api/users.api");
-          const res = await listUsers();
-          const usersData = Array.isArray(res) ? res : (res as any)?.data || [];
-          setUsers(Array.isArray(usersData) ? usersData : []);
-        } catch (err) {
-          console.error("Error loading users:", err);
+        // Load users (for responsible) - only for admin/manager
+        if (userData && (userData.role === "admin" || userData.role === "manager")) {
+          try {
+            const { listUsers } = await import("@/src/api/users.api");
+            const res = await listUsers();
+            console.log('Users API response:', res);
+            const usersData = Array.isArray(res) ? res : (res as any)?.data || [];
+            setUsers(Array.isArray(usersData) ? usersData : []);
+            console.log('Users loaded:', usersData.length);
+          } catch (err: any) {
+            console.error("Error loading users:", err);
+            console.error("Users error details:", {
+              message: err?.message,
+              status: err?.response?.status,
+              statusText: err?.response?.statusText,
+              data: err?.response?.data
+            });
+            // Fallback: at least include the current user
+            if (userData) {
+              const currentUserForDropdown = {
+                id: parseInt(userData.id) || userData.id,
+                firstName: userData.firstName || userData.company_name || '',
+                lastName: userData.lastName || '',
+                email: userData.email,
+                role: userData.role
+              };
+              setUsers([currentUserForDropdown]);
+              console.log('Using current user as fallback for responsible dropdown');
+            }
+          }
+        } else {
+          // For non-admin/manager users, only include current user in dropdown
+          if (userData) {
+            const currentUserForDropdown = {
+              id: parseInt(userData.id) || userData.id,
+              firstName: userData.firstName || userData.company_name || '',
+              lastName: userData.lastName || '',
+              email: userData.email,
+              role: userData.role
+            };
+            setUsers([currentUserForDropdown]);
+            console.log('Using current user only for responsible dropdown (role-based restriction)');
+          }
         }
 
       } catch (error) {
@@ -395,15 +515,17 @@ export default function DealsPage() {
     }
   }, [currentPage, statusFilter, user]);
 
-  // Debug leads state changes
+  // Debug state changes
   useEffect(() => {
-    console.log('=== LEADS STATE DEBUG ===');
-    console.log('Leads state:', leads);
+    console.log('=== STATE DEBUG ===');
+    console.log('Clients:', clients);
+    console.log('Users:', users);
+    console.log('Leads:', leads);
+    console.log('Clients length:', clients.length);
+    console.log('Users length:', users.length);
     console.log('Leads length:', leads.length);
-    console.log('Leads type:', Array.isArray(leads) ? 'array' : typeof leads);
-    console.log('First lead:', leads[0]);
-    console.log('=== LEADS STATE DEBUG END ===');
-  }, [leads]);
+    console.log('=== STATE DEBUG END ===');
+  }, [clients, users, leads]);
 
   // Debounced search
   useEffect(() => {
@@ -437,13 +559,16 @@ export default function DealsPage() {
       const { list_leads, list_my_leads } = await import("@/src/api/leads.api");
       
       const currentUser = getCurrentUser();
+      console.log('Manual refresh - current user role:', currentUser?.role);
+      
+      // Use list_my_leads for non-admin/manager users to avoid 403 errors
       let leadsRes;
-      if (currentUser?.role === 'sales') {
-        console.log('MANUAL REFRESH: Using list_my_leads for sales user');
-        leadsRes = await list_my_leads();
-      } else {
-        console.log('MANUAL REFRESH: Using list_leads for non-sales user');
+      if (currentUser?.role === 'admin' || currentUser?.role === 'manager') {
+        console.log('MANUAL REFRESH: Using list_leads for admin/manager user');
         leadsRes = await list_leads();
+      } else {
+        console.log('MANUAL REFRESH: Using list_my_leads for non-admin/manager user (sales/restricted)');
+        leadsRes = await list_my_leads();
       }
         
       const leadsData = leadsRes?.data || leadsRes || [];
@@ -458,6 +583,16 @@ export default function DealsPage() {
   const openCreateDialog = () => {
     resetNewDealForm();
     setIsCreateDialogOpen(true);
+    // Debug: check current state when opening dialog
+    console.log('=== OPENING CREATE DIALOG ===');
+    console.log('Current clients state:', clients);
+    console.log('Current users state:', users);
+    console.log('Current leads state:', leads);
+    console.log('Clients length:', clients.length);
+    console.log('Users length:', users.length);
+    console.log('Leads length:', leads.length);
+    console.log('=== OPENING CREATE DIALOG END ===');
+    
     // Debug: manually refresh leads when opening dialog
     console.log('Opening create dialog - refreshing leads...');
     refreshLeads();
@@ -752,10 +887,12 @@ export default function DealsPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            Новая сделка
-          </Button>
+          {canWrite && (
+            <Button onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              Новая сделка
+            </Button>
+          )}
         </div>
       </div>
 

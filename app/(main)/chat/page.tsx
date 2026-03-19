@@ -39,6 +39,12 @@ import {
   LogOut,
   UserPlus,
   MessageSquare,
+  Mail,
+  Phone,
+  Building2,
+  FileText,
+  CheckCircle,
+  Calendar,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -165,6 +171,8 @@ export default function ChatPage() {
   const [isAddMembersModalOpen, setIsAddMembersModalOpen] = useState(false);
   const [addMembersList, setAddMembersList] = useState<string[]>([]);
   const [isChatVisible, setIsChatVisible] = useState(false);
+  const [selectedUserInfo, setSelectedUserInfo] = useState<any>(null);
+  const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
 
   const handleNewMessage = useCallback((newMessage: any) => {
     console.log('WebSocket data received:', newMessage);
@@ -490,6 +498,19 @@ export default function ChatPage() {
       console.error(e);
     }
   }
+
+  const handleShowUserInfo = (chat: Chat) => {
+    if (chat.is_group) return; // Don't show user info for group chats
+    
+    const otherMemberId = chat.members?.find(m => m.toString() !== currentUser?.id?.toString());
+    if (!otherMemberId) return;
+    
+    const otherUser = users.find(u => u.id.toString() === otherMemberId.toString());
+    if (otherUser) {
+      setSelectedUserInfo(otherUser);
+      setIsUserInfoModalOpen(true);
+    }
+  };
 
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return "";
@@ -861,10 +882,10 @@ export default function ChatPage() {
             )}
           </div>
         </ScrollArea>
-      </div >
+      </div>
 
       {/* Chat Area */}
-      < div className={`
+      <div className={`
         ${isChatVisible ? 'flex' : 'hidden'}
         flex-1 flex-col
         md:flex
@@ -873,7 +894,7 @@ export default function ChatPage() {
           selectedChat ? (
             <>
               {/* Chat Header */}
-              < div className="p-4 bg-white border-b border-gray-200" >
+              <div className="p-4 bg-white border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsChatVisible(false)}>
@@ -882,12 +903,20 @@ export default function ChatPage() {
                       </svg>
                     </Button>
                     <div className="relative">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={''} />
-                        <AvatarFallback>
-                          {selectedChat.is_group ? <Users className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
-                        </AvatarFallback>
-                      </Avatar>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-full"
+                        onClick={() => handleShowUserInfo(selectedChat)}
+                        disabled={selectedChat.is_group}
+                      >
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={''} />
+                          <AvatarFallback>
+                            {selectedChat.is_group ? <Users className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
                       {selectedChat.online && (
                         <div
                           className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-green-500`}
@@ -923,7 +952,7 @@ export default function ChatPage() {
                     </DropdownMenu>
                   </div>
                 </div>
-              </div >
+              </div>
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4 bg-gray-50">
@@ -1069,10 +1098,10 @@ export default function ChatPage() {
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea >
+              </ScrollArea>
 
               {/* Message Input */}
-              < div className="p-4 bg-white border-t border-gray-200" >
+              <div className="p-4 bg-white border-t border-gray-200">
                 <div className="flex items-center space-x-2">
                   <Input type="file" className="hidden" id="file-upload" onChange={e => e.target.files && handleFileUpload(e.target.files[0])} />
                   <Label htmlFor="file-upload">
@@ -1104,7 +1133,7 @@ export default function ChatPage() {
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
-              </div >
+              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -1119,7 +1148,7 @@ export default function ChatPage() {
               </div>
             </div>
           )}
-      </div >
+      </div>
       {selectedChat && <Dialog open={isAddMembersModalOpen} onOpenChange={setIsAddMembersModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1152,6 +1181,115 @@ export default function ChatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>}
-    </div >
+
+      {/* User Info Modal */}
+      <Dialog open={isUserInfoModalOpen} onOpenChange={setIsUserInfoModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Информация о пользователе</DialogTitle>
+          </DialogHeader>
+          {selectedUserInfo && (
+            <div className="space-y-6">
+              {/* Avatar and Basic Info */}
+              <div className="flex flex-col items-center space-y-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={''} />
+                  <AvatarFallback className="text-lg">
+                    {selectedUserInfo.firstName 
+                      ? `${selectedUserInfo.firstName[0]}${selectedUserInfo.lastName?.[0] || ''}`.toUpperCase()
+                      : (selectedUserInfo.company_name?.[0] || selectedUserInfo.email?.[0] || 'U').toUpperCase()
+                    }
+                  </AvatarFallback>
+                </Avatar>
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold">
+                    {selectedUserInfo.firstName 
+                      ? `${selectedUserInfo.firstName} ${selectedUserInfo.lastName || ''}`.trim()
+                      : selectedUserInfo.company_name || 'Пользователь'
+                    }
+                  </h3>
+                  {selectedUserInfo.email && (
+                    <p className="text-sm text-muted-foreground">{selectedUserInfo.email}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground">Контактная информация</h4>
+                <div className="space-y-3">
+                  {selectedUserInfo.email && (
+                    <div className="flex items-center space-x-3">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{selectedUserInfo.email}</span>
+                    </div>
+                  )}
+                  {selectedUserInfo.phone && (
+                    <div className="flex items-center space-x-3">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{selectedUserInfo.phone}</span>
+                    </div>
+                  )}
+                  {selectedUserInfo.company_name && (
+                    <div className="flex items-center space-x-3">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{selectedUserInfo.company_name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground">Дополнительная информация</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <UserIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">ID: {selectedUserInfo.id}</span>
+                  </div>
+                  {selectedUserInfo.bin_iin && (
+                    <div className="flex items-center space-x-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">БИН/ИИН: {selectedUserInfo.bin_iin}</span>
+                    </div>
+                  )}
+                  {selectedUserInfo.is_verified !== undefined && (
+                    <div className="flex items-center space-x-3">
+                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        Статус: {selectedUserInfo.is_verified ? 'Подтвержден' : 'Не подтвержден'}
+                      </span>
+                    </div>
+                  )}
+                  {selectedUserInfo.verified_at && (
+                    <div className="flex items-center space-x-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        Верифицирован: {new Date(selectedUserInfo.verified_at).toLocaleDateString('ru-RU')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center justify-center">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${selectedUserInfo.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedUserInfo.is_online ? 'В сети' : 'Не в сети'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Закрыть</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

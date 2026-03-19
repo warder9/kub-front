@@ -31,7 +31,7 @@ export default function LoginPage() {
     // Check if user is already authenticated
     const token = localStorage.getItem("auth_token");
     if (token) {
-      router.push("/users");
+      router.push("/dashboard");
     }
   }, [router]);
 
@@ -44,7 +44,7 @@ export default function LoginPage() {
       const { login } = await import("@/src/api/auth.api");
       // Функция login уже сохраняет токен и пользователя через setAuthToken и setCurrentUser
       await login({ email, password });
-      router.push("/users");
+      router.push("/dashboard");
     } catch (err: any) {
       setError(err?.message || "Произошла ошибка при входе в систему");
     } finally {
