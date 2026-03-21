@@ -139,8 +139,19 @@ const docTypeLabels: Record<string, string> = {
 const creatableDocTypes: { value: string; label: string }[] = [
     { value: "contract_paid_full_ru", label: "Договор полной оплаты (рус)" },
     { value: "contract_paid_50_50_ru", label: "Договор 50/50 (рус)" },
+    { value: "contract_free_ru", label: "Договор (бесплатный, рус)" },
     { value: "refund_application", label: "Заявление на возврат" },
     { value: "pause_application", label: "Заявление на паузу" },
+    { value: "avr_kub_group", label: "АВР KUB Group" },
+    { value: "receipt_refund_full", label: "Расписка о полном возврате" },
+    { value: "receipt_refund_partial", label: "Расписка о частичном возврате" },
+    { value: "cancel_appointment", label: "Заявление на отмену записи" },
+    { value: "documents_handover_act", label: "Акт приёма-передачи документов" },
+    { value: "visa_questionnaire", label: "Визовый опросник" },
+    { value: "termination_transfer", label: "Соглашение о расторжении с передачей" },
+    { value: "termination_waiver", label: "Соглашение о расторжении с отказом от претензий" },
+    { value: "contract_language_courses", label: "Договор на языковые курсы" },
+    { value: "addendum_korea", label: "Дополнительное соглашение (Корея)" },
 ]
 
 const statusLabels: Record<string, string> = {
@@ -178,10 +189,32 @@ function getExtraDefaults(docType: string): Record<string, any> {
             return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "" }
         case "contract_paid_50_50_ru":
             return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "", PREPAY_AMOUNT_NUM: "", PREPAY_AMOUNT_TEXT: "" }
+        case "contract_free_ru":
+            return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "" }
         case "refund_application":
             return { reason_code: "", REFUND_REASON_TEXT: "", REFUND_AMOUNT_NUM: "", REFUND_AMOUNT_TEXT: "" }
         case "pause_application":
             return { reason_code: "", PAUSE_REASON_TEXT: "", PAUSE_FROM_DATE: "", PAUSE_TO_DATE: "" }
+        case "avr_kub_group":
+            return {}
+        case "receipt_refund_full":
+            return { REFUND_AMOUNT_NUM: "", REFUND_AMOUNT_TEXT: "", REFUND_DATE: "" }
+        case "receipt_refund_partial":
+            return { REFUND_AMOUNT_NUM: "", REFUND_AMOUNT_TEXT: "", REFUND_DATE: "" }
+        case "cancel_appointment":
+            return { reason_code: "", CANCEL_DATE: "" }
+        case "documents_handover_act":
+            return { DOCS_PRESENT: "", HANDOVER_DATE: "" }
+        case "visa_questionnaire":
+            return {}
+        case "termination_transfer":
+            return { TERMINATION_DATE: "" }
+        case "termination_waiver":
+            return { TERMINATION_DATE: "" }
+        case "contract_language_courses":
+            return { CONTRACT_NUMBER: "", CONTRACT_DATE_TEXT: "" }
+        case "addendum_korea":
+            return { ADDENDUM_NUMBER: "", ADDENDUM_DATE: "" }
         default:
             return {}
     }
