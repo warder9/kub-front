@@ -21,11 +21,72 @@ export async function getDocumentById(id: number): Promise<Models.Document> {
 // ─── Create (only stable endpoint) ──────────────────────────────
 
 export async function createDocumentFromClient(payload: Models.Documents_Create_from_client_Request): Promise<Models.Document> {
-  const res = await api.post(`/documents/create-from-client`, payload)
-  return res.data
+  try {
+    console.log('Creating document with payload:', payload);
+    const res = await api.post('/documents/create-from-client', payload);
+    console.log('Document creation response:', res);
+    return res.data;
+  } catch (error: any) {
+    console.error('Document creation failed with detailed error:', {
+      message: error?.message,
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
+      data: error?.response?.data,
+      config: {
+        url: error?.config?.url,
+        method: error?.config?.method,
+        data: error?.config?.data,
+        headers: error?.config?.headers
+      }
+    });
+    
+    console.log('Full error object:', error);
+    console.log('error.response:', error?.response);
+    console.log('error.response.data:', error?.response?.data);
+    
+    // Extract detailed error message from backend if available
+    const backendError = error?.response?.data;
+    console.log('backendError:', backendError);
+    let errorMessage = 'Failed to create document';
+    
+    if (backendError) {
+      if (typeof backendError === 'string') {
+        errorMessage = backendError;
+      } else if (backendError.message) {
+        errorMessage = backendError.message;
+      } else if (backendError.error === 'missing_fields') {
+        const scope = backendError.scope || 'unknown';
+        const missingFields = backendError.missing_fields || [];
+        console.log('missingFields array:', missingFields);
+        console.log('First missing field:', missingFields[0]);
+        const fieldNames = missingFields.map((field: any) => 
+          typeof field === 'string' ? field : field.key || field.name || field.Key || field.toString()
+        );
+        
+        const source = missingFields[0]?.source || 'unknown';
+        let messagePrefix = '';
+        if (source === 'client') {
+          messagePrefix = 'У выбранного клиента отсутствуют обязательные данные. Заполните в профиле клиента: ';
+        } else if (source === 'deal') {
+          messagePrefix = 'У выбранной сделки отсутствуют обязательные данные: ';
+        } else {
+          messagePrefix = `Отсутствуют обязательные поля в ${scope}: `;
+        }
+        
+        errorMessage = messagePrefix + fieldNames.join(', ');
+      } else if (backendError.error) {
+        errorMessage = backendError.error;
+      } else if (backendError.detail) {
+        errorMessage = backendError.detail;
+      } else if (Array.isArray(backendError)) {
+        // Handle validation errors array
+        errorMessage = backendError.map(err => err.message || err).join(', ');
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
 }
-
-// ─── Upload (legacy, keep for compat) ───────────────────────────
 
 export async function uploadDocument(payload: Models.Documents_Upload_document_Request): Promise<any> {
   const formData = new FormData();

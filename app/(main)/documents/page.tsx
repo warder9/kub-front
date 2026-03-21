@@ -98,6 +98,8 @@ import { ru } from "date-fns/locale"
 import { toast } from "sonner"
 import { getCurrentUser, getCurrentCompany, setCurrentUser } from "@/lib/auth"
 import * as AuthAPI from "@/src/api/auth.api"
+import * as ClientAPI from "@/src/api/clients.api"
+import * as DealsAPI from "@/src/api/deals.api"
 import {
     getDocuments,
     getDocumentsByDeal,
@@ -262,7 +264,7 @@ function ComboboxSelect({
 // ─── Role helper ─────────────────────────────────────────────────
 
 function getRoleKey(roleId?: number): string {
-    const map: Record<number, string> = { 40: "management", 30: "admin", 20: "control", 10: "operations", 5: "sales" }
+    const map: Record<number, string> = { 40: "management", 30: "admin", 20: "control", 10: "sales", 5: "user" }
     return map[roleId || 0] || "user"
 }
 
@@ -304,10 +306,10 @@ export default function DocumentsPage() {
                     email: userData.email,
                     phone: userData.phone,
                     role: userData.role_id === 40 ? 'management' : 
-                          userData.role_id === 5 ? 'sales' : 
-                          userData.role_id === 10 ? 'operations' : 
+                          userData.role_id === 10 ? 'sales' : 
                           userData.role_id === 20 ? 'control' : 
-                          userData.role_id === 30 ? 'admin' : 'user',
+                          userData.role_id === 30 ? 'admin' : 
+                          userData.role_id === 5 ? 'user' : 'user',
                     role_id: userData.role_id,
                     company_name: userData.company_name,
                     bin_iin: userData.bin_iin,
@@ -341,6 +343,7 @@ export default function DocumentsPage() {
         doc_type: "contract_paid_full_ru" as string,
         extra: {} as Record<string, any>,
     })
+    const [createError, setCreateError] = useState<string | null>(null)
 
     // ─── Details / View ─────────────────────────────────────────
 
@@ -375,7 +378,15 @@ export default function DocumentsPage() {
         setLoading(true)
         try {
             const params: any = { page: currentPage, size }
-            const res = await getDocuments(params)
+            let res
+            
+            // Sales users can only access documents for specific deals
+            if (currentUser?.role === 'sales' && selectedDealId) {
+                res = await getDocumentsByDeal(selectedDealId, params)
+            } else {
+                res = await getDocuments(params)
+            }
+            
             const data = Array.isArray(res) ? res : (res as any)?.data || []
             setDocuments(data)
             setTotalDocuments((res as any)?.total || data.length)
@@ -387,13 +398,48 @@ export default function DocumentsPage() {
         } finally {
             setLoading(false)
         }
-    }, [currentPage, size])
+    }, [currentPage, size, currentUser?.role, selectedDealId])
 
     useEffect(() => {
         if (freshUserData) {
             fetchDocuments()
         }
     }, [fetchDocuments, freshUserData])
+
+    // Load clients and deals for sales users
+    useEffect(() => {
+        if (freshUserData && user?.role === 'sales') {
+            const loadSalesUserData = async () => {
+                try {
+                    console.log('Loading clients and deals for sales user...');
+                    const [clientsRes, dealsRes] = await Promise.all([
+                        ClientAPI.listMyClients({ page: 1, limit: 100 }),
+                        DealsAPI.list_my_deals(undefined, { page: 1, limit: 100 })
+                    ]);
+                    
+                    const clientsData = Array.isArray(clientsRes) ? clientsRes : (clientsRes as any)?.data || [];
+                    const dealsData = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || [];
+                    
+                    console.log('Loaded clients:', clientsData);
+                    console.log('Loaded deals:', dealsData);
+                    
+                    setClients(clientsData);
+                    setDeals(dealsData);
+                    
+                    // Auto-select first deal for sales users if none selected
+                    if (!selectedDealId && dealsData.length > 0) {
+                        console.log('Auto-selecting first deal for sales user:', dealsData[0].id);
+                        setSelectedDealId(dealsData[0].id);
+                    }
+                } catch (error) {
+                    console.error('Error loading sales user data:', error);
+                    toast.error('Ошибка при загрузке данных');
+                }
+            };
+            
+            loadSalesUserData();
+        }
+    }, [freshUserData, user?.role])
 
     const handlePageChange = (page: number) => {
         const params = new URLSearchParams(searchParams)
@@ -433,25 +479,54 @@ export default function DocumentsPage() {
             toast.error("Выберите клиента и сделку")
             return
         }
+        
+        const clientId = Number(createForm.client_id);
+        const dealId = Number(createForm.deal_id);
+        
+        if (isNaN(clientId) || isNaN(dealId)) {
+            toast.error("Неверные ID клиента или сделки")
+            return
+        }
+        
+        // Validate required extra fields
+        const requiredExtras = getExtraDefaults(createForm.doc_type);
+        const missingFields = Object.keys(requiredExtras).filter(key => !createForm.extra[key] || createForm.extra[key].trim() === "");
+        
+        if (missingFields.length > 0) {
+            toast.error(`Заполните следующие обязательные поля: ${missingFields.join(", ")}`)
+            return
+        }
+        
         setActionLoading(true)
         try {
+            const extraData = Object.fromEntries(
+                Object.entries(createForm.extra).filter(([_, value]) => value && value.trim() !== "")
+            );
+            
             const payload: any = {
-                client_id: Number(createForm.client_id),
-                deal_id: Number(createForm.deal_id),
+                client_id: clientId,
+                deal_id: dealId,
                 doc_type: createForm.doc_type,
+                ...(Object.keys(extraData).length > 0 && { extra: extraData }),
             }
-            // Attach extra if has values
-            const hasExtra = Object.values(createForm.extra).some((v) => v !== "")
-            if (hasExtra) {
-                payload.extra = createForm.extra
-            }
+            
+            console.log('Creating document with payload:', payload);
+            console.log('createForm values:', createForm);
             await createDocumentFromClient(payload)
             toast.success("Документ создан")
             setIsCreateOpen(false)
+            setCreateForm({
+            client_id: "",
+            deal_id: "",
+            doc_type: "contract_paid_full_ru" as string,
+            extra: getExtraDefaults("contract_paid_full_ru"),
+        })
             await fetchDocuments()
         } catch (err: any) {
             console.error("Error creating document:", err)
-            toast.error(err?.message || "Ошибка при создании документа")
+            const errorMessage = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Ошибка при создании документа"
+            setCreateError(errorMessage)
+            toast.error(errorMessage)
         } finally {
             setActionLoading(false)
         }
@@ -741,7 +816,7 @@ export default function DocumentsPage() {
             </div>
 
             {/* Deal Filter for Sales Users */}
-            {(currentUser?.role === 'sales' || currentUser?.role_id === 5) && (
+            {(currentUser?.role === 'sales' || currentUser?.role_id === 10) && (
                 <div className="mx-6 mb-6">
                     <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-sm">
@@ -749,10 +824,7 @@ export default function DocumentsPage() {
                             <ComboboxSelect
                                 value={selectedDealId || ""}
                                 onChange={(val) => setSelectedDealId(val ? Number(val) : null)}
-                                options={[
-                                    { value: "", label: "Все сделки" },
-                                    ...dealOptions
-                                ]}
+                                options={dealOptions}
                                 placeholder="Выберите сделку..."
                                 searchPlaceholder="Поиск сделки..."
                                 emptyText="Сделки не найдены"
@@ -768,6 +840,9 @@ export default function DocumentsPage() {
                             </Button>
                         </div>
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Пользователям отдела продаж доступны только документы по их сделкам
+                    </p>
                 </div>
             )}
 
@@ -976,6 +1051,26 @@ export default function DocumentsPage() {
                             Генерация документа из шаблона на основе данных клиента и сделки.
                         </DialogDescription>
                     </DialogHeader>
+                    
+                    {/* Error display */}
+                    {createError && (
+                        <div className="rounded-md border border-red-200 bg-red-50 p-4">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <XCircle className="h-5 w-5 text-red-400" />
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-red-800">
+                                        Ошибка создания документа
+                                    </h3>
+                                    <div className="mt-2 text-sm text-red-700">
+                                        <p>{createError}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Клиент <span className="text-red-500">*</span></Label>

@@ -278,6 +278,13 @@ api.interceptors.response.use(
     }
 
     // Handle other errors
+    if (status === 400) {
+      // For 400 errors, preserve the original response data for detailed error handling
+      const originalError = new Error(error.message);
+      (originalError as any).response = error.response;
+      return Promise.reject(originalError);
+    }
+
     const message = error?.response?.data?.message ||
       error?.response?.data?.error ||
       error.message ||
