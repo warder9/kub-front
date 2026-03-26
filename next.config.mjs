@@ -14,13 +14,12 @@ const nextConfig = {
     return [
       {
         source: '/',
-        destination: '/users',
-        permanent: true,
+        destination: '/auth/login',
+        permanent: false,
       },
     ]
   },
 
-  // Добавляем переопределение маршрутов для проксирования API запросов
   async rewrites() {
     return [
       {

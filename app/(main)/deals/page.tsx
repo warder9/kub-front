@@ -215,8 +215,8 @@ export default function DealsPage() {
       const currentUser = getCurrentUser();
       const userRole = currentUser?.role || user?.role;
       
-      // Prevent sales users from accessing full deals list
-      const effectiveView = userRole === 'sales' ? 'my' : 'all';
+      // Only allow 'all' view for admin and manager roles explicitly
+      const effectiveView = (userRole === 'admin' || userRole === 'manager') ? 'all' : 'my';
       
       console.log('fetchDeals called:', { 
         userRole,
@@ -226,8 +226,8 @@ export default function DealsPage() {
         endpoint: effectiveView === "all" ? '/deals' : '/deals/my'
       });
       
-      // Extra safeguard: if we can't determine the user role, default to 'my' for safety
-      const finalView = (!userRole || userRole === 'sales') ? 'my' : effectiveView;
+      // Use effectiveView as finalView (no extra safeguard needed)
+      const finalView = effectiveView;
       
       const dealsRes = finalView === "all"
         ? await list_deals(undefined, params)
@@ -346,14 +346,12 @@ export default function DealsPage() {
               lastName: "",
               email: companyData.email || '',
               phone: companyData.phone || '',
-              role: "sales", // Default to sales for safety - will be overridden by actual user data
+              role: "sales", // Default to sales for safety
               company_name: companyData.name,
-              role_id: 30,
+              role_id: 10, // Consistent with sales role
               is_verified: true,
               status: 'active'
             };
-            setUser(tempUser);
-            console.log("Using temporary user data (defaulted to sales):", tempUser);
             userData = tempUser; // Use this data for API calls
           }
         }
