@@ -439,16 +439,28 @@ export default function DocumentsPage() {
         }
     }, [fetchDocuments, freshUserData])
 
-    // Load clients and deals for sales users
+    // Load clients and deals for sales and management users
     useEffect(() => {
-        if (freshUserData && user?.role === 'sales') {
-            const loadSalesUserData = async () => {
+        if (freshUserData && (user?.role === 'sales' || user?.role === 'management')) {
+            const loadUserData = async () => {
                 try {
-                    console.log('Loading clients and deals for sales user...');
-                    const [clientsRes, dealsRes] = await Promise.all([
-                        ClientAPI.listMyClients({ page: 1, limit: 100 }),
-                        DealsAPI.list_my_deals(undefined, { page: 1, limit: 100 })
-                    ]);
+                    console.log(`Loading clients and deals for ${user?.role} user...`);
+                    
+                    let clientsRes, dealsRes;
+                    
+                    if (user?.role === 'sales') {
+                        // Sales users get their own data only
+                        [clientsRes, dealsRes] = await Promise.all([
+                            ClientAPI.listMyClients({ page: 1, limit: 100 }),
+                            DealsAPI.list_my_deals(undefined, { page: 1, limit: 100 })
+                        ]);
+                    } else {
+                        // Management users get all data
+                        [clientsRes, dealsRes] = await Promise.all([
+                            ClientAPI.listClients({ page: 1, limit: 100 }),
+                            DealsAPI.list_deals(undefined, { page: 1, limit: 100 })
+                        ]);
+                    }
                     
                     const clientsData = Array.isArray(clientsRes) ? clientsRes : (clientsRes as any)?.data || [];
                     const dealsData = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || [];
@@ -460,17 +472,17 @@ export default function DocumentsPage() {
                     setDeals(dealsData);
                     
                     // Auto-select first deal for sales users if none selected
-                    if (!selectedDealId && dealsData.length > 0) {
+                    if (user?.role === 'sales' && !selectedDealId && dealsData.length > 0) {
                         console.log('Auto-selecting first deal for sales user:', dealsData[0].id);
                         setSelectedDealId(dealsData[0].id);
                     }
                 } catch (error) {
-                    console.error('Error loading sales user data:', error);
+                    console.error('Error loading user data:', error);
                     toast.error('Ошибка при загрузке данных');
                 }
             };
             
-            loadSalesUserData();
+            loadUserData();
         }
     }, [freshUserData, user?.role])
 
@@ -769,10 +781,54 @@ export default function DocumentsPage() {
 
     // ─── Helpers ────────────────────────────────────────────────
 
-    const getClientLabel = (clientId: number) => {
-        const c = clients.find((cl) => cl.id?.toString() === clientId?.toString())
-        if (!c) return `Клиент #${clientId}`
-        return c.first_name ? `${c.first_name} ${c.last_name || ""}`.trim() : (c.name || `Клиент #${clientId}`)
+    const getClientLabel = (clientId: number | string) => {
+        const clientIdStr = clientId?.toString();
+        console.log('Looking for client with ID:', clientIdStr, 'in clients:', clients);
+        
+        const c = clients.find((cl) => {
+            const clIdStr = cl.id?.toString();
+            console.log('Comparing:', clIdStr, 'with:', clientIdStr, 'match:', clIdStr === clientIdStr);
+            return clIdStr === clientIdStr;
+        });
+        
+        if (!c) {
+            console.log('Client not found for ID:', clientIdStr);
+            return `Клиент #${clientIdStr}`;
+        }
+        
+        // Prioritize name field, then first_name + last_name
+        const displayName = c.name || (c.first_name ? `${c.first_name} ${c.last_name || ""}`.trim() : `Клиент #${clientIdStr}`);
+        console.log('Client display name:', displayName, 'client data:', c);
+        return displayName;
+    }
+
+    // Get client through deal relationship
+    const getClientFromDeal = (dealId: number | string) => {
+        const dealIdStr = dealId?.toString();
+        console.log('Looking for deal with ID:', dealIdStr, 'in deals:', deals);
+        
+        const deal = deals.find((d) => {
+            const dIdStr = d.id?.toString();
+            console.log('Comparing deal ID:', dIdStr, 'with:', dealIdStr, 'match:', dIdStr === dealIdStr);
+            return dIdStr === dealIdStr;
+        });
+        
+        if (!deal) {
+            console.log('Deal not found for ID:', dealIdStr);
+            return "—";
+        }
+        
+        console.log('Found deal:', deal);
+        
+        // Try to get client from deal's client_id
+        if (deal.client_id) {
+            console.log('Deal has client_id:', deal.client_id);
+            return getClientLabel(deal.client_id);
+        }
+        
+        // If no client_id in deal, try to find client by matching logic
+        console.log('Deal has no client_id, searching by other means...');
+        return "Клиент через сделку";
     }
 
     const getDealLabel = (dealId: number) => {
@@ -966,12 +1022,25 @@ export default function DocumentsPage() {
                                         const canSign = doc.status === "approved"
                                         const canDelete = !isReadOnly
 
+                                        // Debug logging for each document
+                                        console.log('Processing document:', doc);
+                                        console.log('Document client_id:', doc.client_id, 'type:', typeof doc.client_id);
+                                        console.log('Document deal_id:', doc.deal_id, 'type:', typeof doc.deal_id);
+
                                         return (
                                             <TableRow key={doc.id}>
                                                 <TableCell className="font-mono text-sm">{doc.id}</TableCell>
                                                 <TableCell>{docTypeLabels[doc.doc_type] || doc.doc_type}</TableCell>
                                                 <TableCell className="text-sm">
-                                                    {doc.client_id ? getClientLabel(doc.client_id) : "—"}
+                                                    {(() => {
+                                                        if (!doc.deal_id) {
+                                                            console.log('No deal_id for document:', doc.id);
+                                                            return "—";
+                                                        }
+                                                        const clientLabel = getClientFromDeal(doc.deal_id);
+                                                        console.log('Client from deal result:', clientLabel);
+                                                        return clientLabel;
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
                                                     {doc.deal_id ? getDealLabel(doc.deal_id) : "—"}
