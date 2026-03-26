@@ -146,32 +146,41 @@ export function RoleBasedSidebar() {
         // Force fresh data by clearing any cached user data
         localStorage.removeItem('current_user');
         
-        const [userData, rolesData] = await Promise.all([
+        const [userData, rolesData] = await Promise.allSettled([
           getMe(),
-          RolesAPI.listRoles({ limit: 100 }).catch((err) => {
-            console.warn('Roles API not accessible, using fallback role mapping:', err);
-            return { data: [] };
-          })
+          RolesAPI.listRoles({ limit: 100 })
         ]);
         
-        console.log('User data from API:', userData);
-        console.log('Roles data from API:', rolesData);
+        console.log('User data from API:', userData.status === 'fulfilled' ? userData.value : userData.reason);
         
-        setUser(userData);
+        // Handle user data
+        if (userData.status === 'fulfilled') {
+          setUser(userData.value);
+        } else {
+          console.error('Failed to load user data:', userData.reason);
+          return;
+        }
         
-        // Use the exact same logic as users page
-        const roles = Array.isArray(rolesData) ? rolesData : rolesData.data || [];
-        console.log('Processed roles:', roles);
+        // Handle roles data - roles are optional for sidebar functionality
+        let roles: { id: number, name: string }[] = [];
+        if (rolesData.status === 'fulfilled') {
+          const rolesResponse = rolesData.value;
+          roles = Array.isArray(rolesResponse) ? rolesResponse : rolesResponse.data || [];
+          console.log('Roles data from API:', roles);
+        } else {
+          console.warn('Roles API not accessible (403 expected for sales users), using empty roles:', rolesData.reason);
+        }
         setAvailableRoles(roles);
         
-        if (userData) {
+        if (userData.status === 'fulfilled') {
+          const userValue = userData.value;
           console.log('=== ROLE DEBUG ===');
-          console.log('Raw userData:', userData);
-          console.log('User role_id (type):', userData.role_id, typeof userData.role_id);
+          console.log('Raw userData:', userValue);
+          console.log('User role_id (type):', userValue.role_id, typeof userValue.role_id);
           console.log('Available roles from API:', roles);
           console.log('Role IDs in available roles:', roles.map(r => ({ id: r.id, name: r.name })));
           
-          const role = roles.find(r => r.id === userData.role_id);
+          const role = roles.find(r => r.id === userValue.role_id);
           console.log('Found role in API roles:', role);
           
           // Show what admin panel would display
@@ -179,7 +188,7 @@ export function RoleBasedSidebar() {
           console.log('Admin panel would show:', adminPanelRoleName);
           
           // Use API role name to match admin panel, fallback to hardcoded mapping
-          const roleKey = role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userData.role_id);
+          const roleKey = role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userValue.role_id);
           setUserRole(roleKey);
           console.log('Using role key:', roleKey);
           console.log('Display name will be:', adminPanelRoleName || getRoleDisplayName(roleKey));

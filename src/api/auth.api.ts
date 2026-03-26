@@ -29,8 +29,8 @@ function getRoleFromId(roleId: number): string {
     40: 'management',
     30: 'admin',
     20: 'control',
-    10: 'operations',
-    5: 'sales'
+    10: 'sales',
+    5: 'user'
     // Добавьте другие role_id по мере необходимости
   }
   return roleMapping[roleId] || 'user'

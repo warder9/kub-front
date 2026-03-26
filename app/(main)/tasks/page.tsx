@@ -86,7 +86,8 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth"
+import { getMe } from "@/src/api/auth.api"
 import {
   create_task,
   list_tasks,
@@ -104,6 +105,18 @@ import { listUsers } from "@/src/api/users.api"
 type TaskStatus = "new" | "in_progress" | "done" | "cancelled"
 type TaskPriority = "low" | "normal" | "high" | "urgent"
 type EntityType = "deal" | "lead"
+
+// Helper function to map role_id to role name (same as sidebar)
+function getRoleFromId(roleId: number): string {
+  const roleMapping: Record<number, string> = {
+    40: 'management',
+    30: 'admin',
+    20: 'control',
+    10: 'sales',
+    5: 'user'
+  }
+  return roleMapping[roleId] || 'user'
+}
 
 const statusTransitions: Record<TaskStatus, TaskStatus[]> = {
   new: ["in_progress", "cancelled"],
@@ -230,6 +243,8 @@ export default function TasksPage() {
   const [deals, setDeals] = useState<any[]>([])
   const [leads, setLeads] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [user, setUser] = useState<any>(null)
+  const [canWrite, setCanWrite] = useState(false)
 
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -264,6 +279,29 @@ export default function TasksPage() {
   const currentPage = Number(searchParams.get("page")) || 1
   const limit = 20
 
+  // Fetch user data and permissions
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await getMe();
+        setUser(userData);
+        // Use role_id and map it to role name like the sidebar does
+        const userRole = getRoleFromId(userData.role_id);
+        const hasWriteAccess = userData && hasPermission(userRole, ["tasks:write"]);
+        setCanWrite(hasWriteAccess);
+      } catch (error) {
+        console.error("Failed to fetch user data", error);
+        // Fallback to localStorage
+        const localUser = getCurrentUser();
+        setUser(localUser);
+        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        setCanWrite(!!(localUser && hasPermission(userRole, ["tasks:write"])));
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
   // ─── Data Loading ────────────────────────────────────────────
 
   const fetchTasks = async () => {
@@ -273,20 +311,27 @@ export default function TasksPage() {
       if (searchTerm) params.search = searchTerm
 
       // Prevent sales users from accessing full tasks list
-      const effectiveView = currentUser?.role === 'sales' ? 'my' : 'all';
+      // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
+      const effectiveView = currentUser?.role === 'sales' ? 'all' : 'all';
       
       console.log('fetchTasks called:', { 
         userRole: currentUser?.role, 
         effectiveView,
-        endpoint: effectiveView === "all" ? '/tasks' : '/tasks/my'
+        endpoint: '/tasks' // Always use /tasks for now since /tasks/my returns 400
       });
       
-      const res = effectiveView === "all"
-        ? await list_tasks(undefined, params)
-        : await list_my_tasks(undefined, params);
+      const res = await list_tasks(undefined, params);
       
       const data = res?.data || (Array.isArray(res) ? res : [])
       const total = res?.total || data.length
+      
+      console.log('Tasks response:', {
+        userRole: currentUser?.role,
+        totalTasks: data.length,
+        tasks: data.slice(0, 3), // Show first 3 tasks for debugging
+        responseTotal: total
+      });
+      
       setTasks(data)
       setTotalTasks(total)
     } catch (err: any) {
@@ -298,31 +343,56 @@ export default function TasksPage() {
   }
 
   useEffect(() => {
+    console.log('=== TASKS PAGE useEffect triggered ===');
     const loadMeta = async () => {
+      console.log('=== loadMeta function started ===');
       try {
-        const userData = getCurrentUser()
+        let userData = getCurrentUser()
         const companyData = getCurrentCompany()
+        
+        console.log('Initial data check:', { 
+          hasUserData: !!userData, 
+          hasCompanyData: !!companyData,
+          userData: userData ? { id: userData.id, role: userData.role, role_id: userData.role_id } : null
+        });
         
         // Temporary fix: if user data is missing but token exists, try to get user data
         if (!userData) {
           const token = localStorage.getItem("auth_token");
+          console.log('No userData, checking token:', !!token);
           if (token && companyData) {
-            // Create minimal user data from company data
+            // Try to get actual user data from localStorage to preserve the correct role
+            const storedUser = localStorage.getItem("current_user");
+            let userRole = "sales"; // Default to sales for safety
+            let roleId = 10;
+            
+            if (storedUser) {
+              try {
+                const parsedUser = JSON.parse(storedUser);
+                userRole = parsedUser.role || userRole;
+                roleId = parsedUser.role_id || roleId;
+              } catch (e) {
+                console.log("Failed to parse stored user, using default role");
+              }
+            }
+            
+            // Create minimal user data from company data with correct role
             const tempUser = {
-              id: companyData.id,
+              id: String(companyData.id),
               firstName: companyData.name,
               lastName: "",
-              email: companyData.email,
-              phone: companyData.phone,
-              role: "admin",
+              email: companyData.email || '',
+              phone: companyData.phone || '',
+              role: userRole, // Use actual role instead of hardcoded "admin"
               company_name: companyData.name,
-              role_id: 30,
+              role_id: roleId, // Use actual role_id
               is_verified: true,
               status: 'active'
             };
             setCurrentUser(tempUser);
-            console.log("Using temporary user data in tasks:", tempUser);
-            return;
+            console.log("Using temporary user data in tasks with correct role:", tempUser);
+            // Don't return here - continue to load API data with the temporary user
+            userData = tempUser; // Use the temp user for API calls
           }
         }
         
@@ -331,40 +401,72 @@ export default function TasksPage() {
           return
         }
         setCurrentUser(userData)
+        
+        console.log('About to load data with userData:', userData);
 
         // Load users
         try {
+          console.log('Loading users for user role:', userData?.role);
           const res = await listUsers()
           const usersData = Array.isArray(res) ? res : (res as any)?.data || []
-          setUsers(Array.isArray(usersData) ? usersData : [])
+          console.log('Users API response:', res);
+          console.log('Processed usersData:', usersData);
+          
+          // Always include current user in performers list
+          let finalUsers = Array.isArray(usersData) ? usersData : [];
+          if (userData && !finalUsers.find(u => u.id === userData.id)) {
+            finalUsers = [userData, ...finalUsers];
+            console.log('Added current user to performers list:', userData);
+          }
+          
+          setUsers(finalUsers)
         } catch (err: any) {
-          // Handle 403 errors gracefully - users list is not critical for tasks
+          // Handle 403 errors gracefully - always include current user
           if (err?.response?.status === 403) {
-            console.log('403 error loading users for tasks, setting empty array');
-            setUsers([]);
+            console.log('403 error loading users for tasks, including current user only');
+            const fallbackUsers = userData ? [userData] : [];
+            console.log('Fallback users (current user only):', fallbackUsers);
+            setUsers(fallbackUsers);
           } else {
             console.error("Error loading users:", err)
+            // Still try to include current user
+            if (userData) {
+              setUsers([userData]);
+              console.log('Error loading users, but included current user:', userData);
+            }
           }
         }
 
-        // Load deals
+        // Load deals - use role-appropriate endpoint for sales users
         try {
-          const { list_deals } = await import("@/src/api/deals.api")
-          const res = await list_deals()
+          console.log('Loading deals for user role:', userData?.role);
+          const { list_deals, list_my_deals } = await import("@/src/api/deals.api")
+          const res = userData?.role === 'sales' 
+            ? await list_my_deals() 
+            : await list_deals();
+          console.log('Deals API response:', res);
           const dealsData = res?.data || (Array.isArray(res) ? res : [])
+          console.log('Processed dealsData:', dealsData);
           setDeals(Array.isArray(dealsData) ? dealsData : [])
         } catch (err) {
           console.error("Error loading deals:", err)
+          setDeals([])
         }
 
-        // Load leads
+        // Load leads - use role-appropriate endpoint for sales users
         try {
-          const { list_leads } = await import("@/src/api/leads.api")
-          const res = await list_leads()
+          console.log('Loading leads for user role:', userData?.role);
+          const { list_leads, list_my_leads } = await import("@/src/api/leads.api")
+          const res = userData?.role === 'sales' 
+            ? await list_my_leads() 
+            : await list_leads();
+          console.log('Leads API response:', res);
           const leadsData = res?.data || (Array.isArray(res) ? res : [])
+          console.log('Processed leadsData:', leadsData);
           setLeads(Array.isArray(leadsData) ? leadsData : [])
         } catch (err) {
           console.error("Error loading leads:", err)
+          setLeads([])
         }
       } catch (err) {
         console.error("Error loading meta:", err)
@@ -432,6 +534,19 @@ export default function TasksPage() {
     : formData.entity_type === "lead"
       ? leads.map((l) => ({ value: l.id.toString(), label: l.title || `Лид #${l.id}` }))
       : []
+
+  // Debug logs for dropdown options
+  console.log('Dropdown data debug:', {
+    users: users.map(u => ({ id: u.id, name: u.firstName || u.company_name || u.email })),
+    deals: deals.map(d => ({ id: d.id, amount: d.amount })),
+    leads: leads.map(l => ({ id: l.id, title: l.title })),
+    entityOptions,
+    currentUserRole: currentUser?.role,
+    entityType: formData.entity_type,
+    usersLength: users.length,
+    dealsLength: deals.length,
+    leadsLength: leads.length
+  });
 
   // ─── CRUD Handlers ──────────────────────────────────────────
 
@@ -612,10 +727,12 @@ export default function TasksPage() {
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            Новая задача
-          </Button>
+          {canWrite && (
+            <Button onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              Новая задача
+            </Button>
+          )}
         </div>
       </div>
 

@@ -96,7 +96,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany, setCurrentUser } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, setCurrentUser, hasPermission } from "@/lib/auth"
 import * as AuthAPI from "@/src/api/auth.api"
 import * as ClientAPI from "@/src/api/clients.api"
 import * as DealsAPI from "@/src/api/deals.api"
@@ -318,6 +318,7 @@ export default function DocumentsPage() {
     const [currentUser, setCurrentUserState] = useState<any>(null)
     const [freshUserData, setFreshUserData] = useState<any>(null)
     const [isReadOnly, setIsReadOnly] = useState(false)
+    const [canWriteDocuments, setCanWriteDocuments] = useState(false)
     const [selectedDealId, setSelectedDealId] = useState<number | null>(null)
     
     // Get fresh user data or fallback to state
@@ -355,6 +356,12 @@ export default function DocumentsPage() {
                 
                 console.log('Transformed user data in documents:', transformedUser);
                 setFreshUserData(transformedUser);
+                
+                // Set document write permissions
+                const userRole = getRoleKey(transformedUser.role_id);
+                const hasDocumentWriteAccess = hasPermission(userRole, ["documents:write"]);
+                setCanWriteDocuments(hasDocumentWriteAccess);
+                console.log('Document write permissions:', { userRole, hasDocumentWriteAccess });
                 
                 // Update localStorage with fresh data
                 setCurrentUser(transformedUser);
@@ -895,7 +902,7 @@ export default function DocumentsPage() {
                     <Button variant="outline" size="icon" onClick={fetchDocuments} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     </Button>
-                    {!isReadOnly && (
+                    {canWriteDocuments && (
                         <Button onClick={openCreate}>
                             <Plus className="h-4 w-4 mr-2" />
                             Создать документ

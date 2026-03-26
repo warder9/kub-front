@@ -1074,14 +1074,16 @@ export default function DealsPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(deal)}
-                            title="Редактировать"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {canWrite && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(deal)}
+                              title="Редактировать"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
                           {!isFinalStatus(deal.status) && (
                             <Button
                               variant="ghost"

@@ -106,7 +106,7 @@ export default function UsersPage() {
         UserAPI.listUsers(currentPage, limit),
         UserAPI.getUsersCount(), // We might use this or response total
         UserAPI.getUsersCountByRole(Roles.ADMIN),
-        UserAPI.getUsersCountByRole(Roles.MANAGER),
+        UserAPI.getUsersCountByRole(Roles.MANAGEMENT),
         UserAPI.getUsersCountByRole(Roles.USER),
       ]);
 
@@ -143,7 +143,15 @@ export default function UsersPage() {
       try {
         const res = await RolesAPI.listRoles({ limit: 100 });
         const rolesData = Array.isArray(res) ? res : res.data || [];
-        setAvailableRoles(rolesData);
+        
+        // Filter out invalid roles and only keep valid ones
+        const validRoles = rolesData.filter(role => {
+          const roleId = Number(role.id);
+          return [5, 10, 20, 30, 40].includes(roleId); // Only valid role IDs
+        });
+        
+        console.log('Filtered roles:', validRoles);
+        setAvailableRoles(validRoles);
       } catch (e) {
         console.error("Failed to load roles", e);
         toast({
@@ -160,8 +168,22 @@ export default function UsersPage() {
 
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
-    const role = availableRoles.find(r => r.id === id);
-    return role ? role.name : "Неизвестная роль";
+    
+    // Use frontend role mapping for consistency
+    switch (id) {
+      case 5:
+        return "Пользователь";
+      case 10:
+        return "Отдел продаж";
+      case 20:
+        return "Отдел контроля";
+      case 30:
+        return "Администратор";
+      case 40:
+        return "Руководство";
+      default:
+        return "Неизвестная роль";
+    }
   };
 
   const handlePageChange = (page: number) => {
@@ -252,7 +274,7 @@ export default function UsersPage() {
       } else {
         const payload = { ...userFormData } as Models.CreateUserRequest;
         // Auto-verify if created by Manager or Admin only
-        if (currentUser?.role_id === Roles.MANAGER || currentUser?.role_id === Roles.ADMIN) {
+        if (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) {
           payload.is_verified = true;
         }
         await UserAPI.createUser(payload);
@@ -488,7 +510,7 @@ export default function UsersPage() {
               </div>
 
               {/* Verification Switch: Visible for editing, or for Managers/Admins when creating (disabled/checked) */}
-              {(editingUser || currentUser?.role_id === Roles.MANAGER || currentUser?.role_id === Roles.ADMIN) && (
+              {(editingUser || currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) && (
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="is_verified" className="cursor-pointer">Верифицирован</Label>
                   <Switch
@@ -496,9 +518,9 @@ export default function UsersPage() {
                     checked={
                       editingUser
                         ? (userFormData as Models.UpdateUserRequest).is_verified
-                        : (currentUser?.role_id === Roles.MANAGER || currentUser?.role_id === Roles.ADMIN) // Auto-checked for Managers/Admins on creation
+                        : (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) // Auto-checked for Managers/Admins on creation
                     }
-                    disabled={!editingUser && (currentUser?.role_id === Roles.MANAGER || currentUser?.role_id === Roles.ADMIN)} // Disabled on creation for Managers
+                    disabled={!editingUser && (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN)} // Disabled on creation for Managers
                     onCheckedChange={(c) => handleSwitchChange('is_verified', c)}
                   />
                 </div>

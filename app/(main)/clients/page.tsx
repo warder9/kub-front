@@ -163,8 +163,8 @@ export default function ClientsPage() {
   
   // Get fresh user data for each render
   const user = freshUserData || getCurrentUser();
-  const canCreate = true; // Temporary override for testing
-  const canEdit = true; // Temporary override for testing
+  const canCreate = user && hasPermission(user.role, ["clients:write"]);
+  const canEdit = user && hasPermission(user.role, ["clients:write"]);
   const canDelete = user && hasPermission(user.role, ["clients:write"]);
 
   // Debug logging
