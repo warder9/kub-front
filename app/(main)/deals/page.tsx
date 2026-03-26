@@ -215,8 +215,8 @@ export default function DealsPage() {
       const currentUser = getCurrentUser();
       const userRole = currentUser?.role || user?.role;
       
-      // Only allow 'all' view for admin and manager roles explicitly
-      const effectiveView = (userRole === 'admin' || userRole === 'manager') ? 'all' : 'my';
+      // Only allow 'all' view for admin and management roles explicitly
+      const effectiveView = (userRole === 'admin' || userRole === 'management') ? 'all' : 'my';
       
       console.log('fetchDeals called:', { 
         userRole,

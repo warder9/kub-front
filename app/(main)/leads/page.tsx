@@ -103,10 +103,10 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [view, setView] = useState<"all" | "my">(() => {
-    // Default to "my" for safety - if user is sales or user data is missing
+    // Default to "my" only for sales users, others get "all"
     const user = getCurrentUser();
     const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
-    return (userRole === 'sales' || !user) ? 'my' : 'all';
+    return userRole === 'sales' ? 'my' : 'all';
   });
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -203,15 +203,15 @@ export default function LeadsPage() {
     console.log('fetchLeads called with view:', view, 'user:', user);
     setIsLoading(true);
     try {
-      // Default to "my" view for safety if user is sales or if user data is missing
+      // Default to "my" view only for sales users
       const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
-      const shouldUseMyView = view === "my" || userRole === 'sales' || !user;
+      const shouldUseMyView = view === "my" || userRole === 'sales';
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
 
-      console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads');
+      console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads', 'userRole:', userRole, 'shouldUseMyView:', shouldUseMyView);
       const res = await fetchFn(undefined, params);
       const data = (res?.data || (Array.isArray(res) ? res : []));
       const total = res?.total || data.length;
