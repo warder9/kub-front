@@ -446,9 +446,9 @@ export default function DocumentsPage() {
         }
     }, [fetchDocuments, freshUserData])
 
-    // Load clients and deals for sales and management users
+    // Load clients and deals for sales, management, control, and operations users
     useEffect(() => {
-        if (freshUserData && (user?.role === 'sales' || user?.role === 'management')) {
+        if (freshUserData && (user?.role === 'sales' || user?.role === 'management' || user?.role === 'control' || user?.role === 'operations')) {
             const loadUserData = async () => {
                 try {
                     console.log(`Loading clients and deals for ${user?.role} user...`);
@@ -462,7 +462,7 @@ export default function DocumentsPage() {
                             DealsAPI.list_my_deals(undefined, { page: 1, limit: 100 })
                         ]);
                     } else {
-                        // Management users get all data
+                        // Management, control, and operations users get all data
                         [clientsRes, dealsRes] = await Promise.all([
                             ClientAPI.listClients({ page: 1, limit: 100 }),
                             DealsAPI.list_deals(undefined, { page: 1, limit: 100 })
@@ -540,28 +540,17 @@ export default function DocumentsPage() {
             return
         }
         
-        // Validate required extra fields
-        const requiredExtras = getExtraDefaults(createForm.doc_type);
-        const missingFields = Object.keys(requiredExtras).filter(key => !createForm.extra[key] || createForm.extra[key].trim() === "");
-        
-        if (missingFields.length > 0) {
-            toast.error(`Заполните следующие обязательные поля: ${missingFields.join(", ")}`)
-            return
+        // Only validate truly required fields (backend will handle optional ones)
+        // Backend auto-fills optional fields and provides defaults
+        const payload: any = {
+            client_id: clientId,
+            deal_id: dealId,
+            doc_type: createForm.doc_type,
+            ...(Object.keys(createForm.extra).length > 0 && { extra: createForm.extra }),
         }
         
         setActionLoading(true)
         try {
-            const extraData = Object.fromEntries(
-                Object.entries(createForm.extra).filter(([_, value]) => value && value.trim() !== "")
-            );
-            
-            const payload: any = {
-                client_id: clientId,
-                deal_id: dealId,
-                doc_type: createForm.doc_type,
-                ...(Object.keys(extraData).length > 0 && { extra: extraData }),
-            }
-            
             console.log('Creating document with payload:', payload);
             console.log('createForm values:', createForm);
             await createDocumentFromClient(payload)

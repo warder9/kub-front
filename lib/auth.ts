@@ -170,7 +170,8 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'clients:write',
       'tasks:read',
       'tasks:write',
-      'documents:read', // Только для подготовки документов
+      'documents:read', // Для просмотра документов
+      'documents:write', // Для создания и подготовки документов
     ],
   };
 
