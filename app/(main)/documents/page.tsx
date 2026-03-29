@@ -114,6 +114,7 @@ import {
     generateSignLink,
 } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
+import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -407,6 +408,11 @@ export default function DocumentsPage() {
     const [signLinkUrl, setSignLinkUrl] = useState("")
     const [signLinkLoading, setSignLinkLoading] = useState(false)
 
+    // ─── PDF Viewer ─────────────────────────────────────────────
+
+    const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false)
+    const [selectedPdfDoc, setSelectedPdfDoc] = useState<Document | null>(null)
+
     // ─── Pagination ─────────────────────────────────────────────
 
     const currentPage = Number(searchParams.get("page")) || 1
@@ -622,14 +628,8 @@ export default function DocumentsPage() {
     // ─── View file (inline) ────────────────────────────────────
 
     const handleViewFile = async (doc: Document) => {
-        try {
-            const blob = await viewDocumentFile(doc.id)
-            const url = URL.createObjectURL(blob)
-            window.open(url, "_blank")
-        } catch (err: any) {
-            console.error("Error viewing file:", err)
-            toast.error(err?.message || "Ошибка при просмотре файла")
-        }
+        setSelectedPdfDoc(doc)
+        setIsPdfViewerOpen(true)
     }
 
     // ─── Download ───────────────────────────────────────────────
@@ -1500,6 +1500,14 @@ export default function DocumentsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ── PDF Viewer Dialog ───────────────────────────────────── */}
+            <PdfViewer
+                isOpen={isPdfViewerOpen}
+                onClose={() => setIsPdfViewerOpen(false)}
+                documentId={selectedPdfDoc?.id || 0}
+                documentName={selectedPdfDoc ? (docTypeLabels[selectedPdfDoc.doc_type] || selectedPdfDoc.doc_type) : undefined}
+            />
         </>
     )
 }
