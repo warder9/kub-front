@@ -61,6 +61,7 @@ import {
   Car,
   Users,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
 import * as ClientAPI from "@/src/api/clients.api";
@@ -138,6 +139,10 @@ export default function ClientsPage() {
   );
   const [clientToDelete, setClientToDelete] = useState<Models.Client | null>(null);
   const [viewingClient, setViewingClient] = useState<Models.Client | null>(null);
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [clientProfile, setClientProfile] = useState<any>(null);
+  const [clientPhotoUrl, setClientPhotoUrl] = useState<string | null>(null);
 
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
@@ -403,12 +408,12 @@ useEffect(() => {
   };
 
   const handleCreateClick = () => {
-    setEditingClient(null);
-    setClientFormData(EMPTY_CLIENT);
+    resetForm();
     setIsFormOpen(true);
   };
 
   const handleEditClick = (client: Models.Client) => {
+    resetForm(true); // Keep editingClient = false initially
     setEditingClient(client);
     setClientFormData({
       // Organization info
@@ -464,8 +469,23 @@ useEffect(() => {
     setClientToDelete(client);
   };
 
-  const handleViewClick = (client: Models.Client) => {
+  const handleViewClick = async (client: Models.Client) => {
     setViewingClient(client);
+    setClientPhotoUrl(null);
+    try {
+      const profile = await ClientAPI.getClientProfile(client.id.toString());
+      setClientProfile(profile);
+      
+      // Fetch authenticated photo if it exists
+      if (profile?.files?.photo35x45?.exists) {
+        const photoUrl = await ClientAPI.getClientPhoto(client.id.toString());
+        setClientPhotoUrl(photoUrl);
+      }
+    } catch (error) {
+      console.error('Failed to fetch client profile:', error);
+      setClientProfile(null);
+      setClientPhotoUrl(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -502,10 +522,60 @@ useEffect(() => {
     return true;
   };
 
+  const handlePhotoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Пожалуйста, выберите файл изображения (JPG, JPEG, PNG).",
+        });
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Размер файла не должен превышать 5 МБ.",
+        });
+        return;
+      }
+      
+      setSelectedPhotoFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearPhoto = () => {
+    setSelectedPhotoFile(null);
+    setPhotoPreview(null);
+  };
+
+  const resetForm = (keepEditingClient = false) => {
+    setClientFormData(EMPTY_CLIENT);
+    setSelectedPhotoFile(null);
+    setPhotoPreview(null);
+    if (!keepEditingClient) {
+      setEditingClient(null);
+    }
+  };
+
   const handleSubmit = async () => {
     console.log('=== CLIENT SUBMISSION DEBUG ===');
     console.log('Editing client:', editingClient);
     console.log('Current form data:', clientFormData);
+    console.log('Selected photo file:', selectedPhotoFile);
     console.log('Required fields validation:');
     
     if (!validateRequiredFields()) {
@@ -518,11 +588,11 @@ useEffect(() => {
     try {
       if (editingClient) {
         console.log('Updating existing client:', editingClient.id);
-        await ClientAPI.updateClient(editingClient.id.toString(), clientFormData);
+        await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), clientFormData, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно обновлен." });
       } else {
         console.log('Creating new client with payload:', clientFormData);
-        await ClientAPI.createClient(clientFormData);
+        await ClientAPI.createClientWithPhoto(clientFormData, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно создан." });
       }
       void fetchClients(); // Refresh list
@@ -536,6 +606,7 @@ useEffect(() => {
       });
     } finally {
       setIsFormOpen(false);
+      resetForm();
     }
   };
 
@@ -890,7 +961,51 @@ useEffect(() => {
                   </div>
                   <div>
                     <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
-                    <Input id="photo_35x45" placeholder="Ссылка на фото..." value={clientFormData.photo_35x45 || ""} onChange={handleFormChange} />
+                    <div className="space-y-2">
+                      {photoPreview ? (
+                        <div className="relative">
+                          <img 
+                            src={photoPreview} 
+                            alt="Preview" 
+                            className="w-32 h-40 object-cover rounded border border-gray-200"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-1 right-1 h-6 w-6 p-0"
+                            onClick={clearPhoto}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                          <div className="text-center">
+                            <div className="text-gray-400 mb-2">
+                              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
+                                Выберите фото
+                              </label>
+                              {' '}
+                              или перетащите файл сюда
+                            </div>
+                            <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
+                          </div>
+                          <input
+                            id="photo-upload"
+                            type="file"
+                            className="hidden"
+                            accept=".jpg,.jpeg,.png"
+                            onChange={handlePhotoSelect}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1015,7 +1130,17 @@ useEffect(() => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={!!viewingClient} onOpenChange={(isOpen) => !isOpen && setViewingClient(null)}>
+      <Dialog open={!!viewingClient} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setViewingClient(null);
+          setClientProfile(null);
+          // Clean up blob URL to prevent memory leaks
+          if (clientPhotoUrl) {
+            URL.revokeObjectURL(clientPhotoUrl);
+          }
+          setClientPhotoUrl(null);
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{viewingClient?.name || `${viewingClient?.last_name} ${viewingClient?.first_name}`}</DialogTitle>
@@ -1024,6 +1149,52 @@ useEffect(() => {
           {viewingClient && (
             <ScrollArea className="max-h-[70vh] p-4">
               <div className="space-y-6">
+                {/* Photo Section */}
+                {clientProfile?.files?.photo35x45?.exists && (
+                  <div>
+                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Фото клиента
+                    </h3>
+                    <div className="flex items-center gap-4">
+                      {clientPhotoUrl ? (
+                        <img 
+                          src={clientPhotoUrl}
+                          alt="Client Photo" 
+                          className="w-32 h-40 object-cover rounded border border-gray-200"
+                          onLoad={() => {
+                            console.log('Client photo loaded successfully');
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load client photo:', e);
+                          }}
+                        />
+                      ) : (
+                        <div className="w-32 h-40 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                          <span className="text-gray-500 text-sm">Загрузка...</span>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = `/api-proxy/clients/${viewingClient?.id}/files/primary/download?category=photo35x45`;
+                            link.download = `client_${viewingClient?.id}_photo.jpg`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Скачать фото
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {clientProfile?.files?.photo35x45?.exists && <Separator />}
                 {/* Required Fields */}
                 <div>
                   <h3 className="font-semibold text-lg mb-2 text-red-600 flex items-center gap-2">
