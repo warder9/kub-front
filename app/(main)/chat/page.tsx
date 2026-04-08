@@ -62,7 +62,7 @@ import {
 import type { Chat, Message } from "@/src/models/chat.model";
 import { getCurrentUser } from "@/lib/auth";
 import { CustomSelect } from "@/components/ui/custom-select";
-import { listUsers } from "@/src/api/users.api";
+import api from "@/src/api/index";
 import type { User } from "@/src/models/users.model";
 import useWebSocket from "@/hooks/useWebSocket";
 import {
@@ -78,6 +78,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Check, CheckCheck, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +101,9 @@ export default function ChatPage() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [userCache, setUserCache] = useState<Map<number, any>>(new Map());
+  const [senderNames, setSenderNames] = useState<Map<number, string>>(new Map());
+  const [previousUserInfo, setPreviousUserInfo] = useState<any>(null); // For back navigation
   const currentUser = getCurrentUser();
   
   // Debug current user
@@ -174,6 +183,15 @@ export default function ChatPage() {
   const [selectedUserInfo, setSelectedUserInfo] = useState<any>(null);
   const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
 
+  // Helper function to get user display name for both User and ChatUserDirectoryItem structures
+  const getUserDisplayName = (user: any) => {
+    // Handle ChatUserDirectoryItem structure (from /chats/users endpoint)
+    if (user.display_name) return user.display_name;
+    // Fallback for regular User structure
+    if (user.firstName) return `${user.firstName} ${user.lastName || ''}`.trim();
+    return user.company_name || user.email || "Without name";
+  };
+
   const handleNewMessage = useCallback((newMessage: any) => {
     console.log('WebSocket data received:', newMessage);
     
@@ -248,20 +266,77 @@ export default function ChatPage() {
   async function fetchUsers() {
     setUsersLoading(true);
     try {
-      const res = await listUsers();
-      setUsers(Array.isArray(res) ? res : (res as any).data || []);
+      const res = await api.get('/chats/users');
+      const usersData = res.data?.value || res.data || [];
+      const usersArray = Array.isArray(usersData) ? usersData : [];
+      setUsers(usersArray);
+      
+      // Cache the users
+      const cache = new Map<number, any>();
+      usersArray.forEach(user => {
+        const userId = user?.user_id || user?.id;
+        if (userId) {
+          cache.set(Number(userId), user);
+        }
+      });
+      setUserCache(cache);
     } catch (e: any) {
-      // Handle 403 errors gracefully - users list is not critical for chat functionality
-      if (e?.response?.status === 403) {
-        console.log('403 error loading users for chat, setting empty array');
-        setUsers([]);
-      } else {
-        console.error(e);
-      }
+      console.error('Error loading chat users:', e);
+      setUsers([]);
     } finally {
       setUsersLoading(false);
     }
   }
+
+  async function fetchUserById(userId: number): Promise<any | null> {
+    // Check cache first
+    if (userCache.has(userId)) {
+      return userCache.get(userId);
+    }
+
+    try {
+      const res = await api.get(`/users/${userId}`);
+      const userData = res.data;
+      
+      if (userData) {
+        // Cache the user
+        setUserCache(prev => {
+          const newCache = new Map(prev);
+          newCache.set(userId, userData);
+          return newCache;
+        });
+        return userData;
+      }
+    } catch (e: any) {
+      console.error(`Error fetching user ${userId}:`, e);
+    }
+
+    return null;
+  }
+
+  // Function to get sender name with cache support
+  const getSenderName = async (senderId: number): Promise<string> => {
+    // First check the cache
+    if (userCache.has(senderId)) {
+      const user = userCache.get(senderId);
+      return getUserDisplayName(user);
+    }
+
+    // Check the users array
+    const user = users.find(u => (u?.user_id || u?.id)?.toString() === senderId.toString());
+    if (user) {
+      return getUserDisplayName(user);
+    }
+
+    // Fetch user details if not found
+    const fetchedUser = await fetchUserById(senderId);
+    if (fetchedUser) {
+      return getUserDisplayName(fetchedUser);
+    }
+
+    // Final fallback
+    return `User ${senderId}`;
+  };
 
   async function fetchChats() {
     setChatsLoading(true);
@@ -286,6 +361,26 @@ export default function ChatPage() {
       setMessages([]);
     }
   }, [selectedChat]);
+
+  // Load sender names when messages change
+  useEffect(() => {
+    const loadSenderNames = async () => {
+      const newSenderNames = new Map<number, string>();
+      
+      for (const message of messages) {
+        if (message.sender_id && !newSenderNames.has(message.sender_id)) {
+          const senderName = await getSenderName(message.sender_id);
+          newSenderNames.set(message.sender_id, senderName);
+        }
+      }
+      
+      setSenderNames(newSenderNames);
+    };
+
+    if (messages.length > 0) {
+      loadSenderNames();
+    }
+  }, [messages, userCache]);
 
   async function fetchMessages(chatId: number) {
     console.log('Fetching messages for chat:', chatId);
@@ -499,16 +594,123 @@ export default function ChatPage() {
     }
   }
 
-  const handleShowUserInfo = (chat: Chat) => {
-    if (chat.is_group) return; // Don't show user info for group chats
+  const handleShowUserInfo = async (chat: Chat) => {
+    if (chat.is_group) {
+      // For group chats, show group information with participants
+      const participants = await fetchGroupParticipants(chat.members || []);
+      
+      const groupInfo = {
+        id: chat.id,
+        name: chat.name || `Group ${chat.id}`,
+        is_group: true,
+        members: chat.members || [],
+        member_count: chat.members?.length || 0,
+        created_at: chat.created_at,
+        description: `${chat.members?.length || 0} participants`,
+        type: 'group',
+        participants: participants // Add detailed participant information
+      };
+      setSelectedUserInfo(groupInfo);
+      setIsUserInfoModalOpen(true);
+      return;
+    }
     
-    const otherMemberId = chat.members?.find(m => m.toString() !== currentUser?.id?.toString());
+    const otherMemberId = chat.members?.find(m => m?.toString() !== currentUser?.id?.toString());
     if (!otherMemberId) return;
     
-    const otherUser = users.find(u => u.id.toString() === otherMemberId.toString());
+    const otherUserId = Number(otherMemberId);
+    
+    // Check cache first
+    if (userCache.has(otherUserId)) {
+      const user = userCache.get(otherUserId);
+      setSelectedUserInfo(user);
+      setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    // Check users array
+    const otherUser = users.find(u => (u?.user_id || u?.id)?.toString() === otherMemberId.toString());
     if (otherUser) {
       setSelectedUserInfo(otherUser);
       setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    // Fetch user if not found
+    const fetchedUser = await fetchUserById(otherUserId);
+    if (fetchedUser) {
+      setSelectedUserInfo(fetchedUser);
+      setIsUserInfoModalOpen(true);
+    }
+  };
+
+  // New function to show user info by sender ID
+  const handleShowUserInfoBySenderId = async (senderId: number) => {
+    if (senderId.toString() === currentUser?.id?.toString()) return; // Don't show info for current user
+    
+    // Check cache first
+    if (userCache.has(senderId)) {
+      const user = userCache.get(senderId);
+      setSelectedUserInfo(user);
+      setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    // Check users array
+    const user = users.find(u => (u?.user_id || u?.id)?.toString() === senderId.toString());
+    if (user) {
+      setSelectedUserInfo(user);
+      setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    // Fetch user if not found
+    const fetchedUser = await fetchUserById(senderId);
+    if (fetchedUser) {
+      setSelectedUserInfo(fetchedUser);
+      setIsUserInfoModalOpen(true);
+    }
+  };
+
+  // Function to fetch all group participants' details
+  const fetchGroupParticipants = async (memberIds: number[]): Promise<any[]> => {
+    const participants = [];
+    
+    for (const memberId of memberIds) {
+      // Check cache first
+      if (userCache.has(memberId)) {
+        participants.push(userCache.get(memberId));
+        continue;
+      }
+
+      // Check users array
+      const user = users.find(u => (u?.user_id || u?.id)?.toString() === memberId.toString());
+      if (user) {
+        participants.push(user);
+        continue;
+      }
+
+      // Fetch user if not found
+      const fetchedUser = await fetchUserById(memberId);
+      if (fetchedUser) {
+        participants.push(fetchedUser);
+      }
+    }
+    
+    return participants;
+  };
+
+  // Function to handle viewing individual participant from group
+  const handleViewParticipant = (participant: any) => {
+    setPreviousUserInfo(selectedUserInfo); // Save current group info
+    setSelectedUserInfo(participant); // Show participant info
+  };
+
+  // Function to go back to previous view (group info)
+  const handleBackToGroup = () => {
+    if (previousUserInfo) {
+      setSelectedUserInfo(previousUserInfo);
+      setPreviousUserInfo(null);
     }
   };
 
@@ -532,19 +734,24 @@ export default function ChatPage() {
 
   const getChatName = (chat: Chat) => {
     if (chat.is_group && chat.name) return chat.name;
+    const otherMemberId = chat.members?.find(m => m?.toString() !== currentUser?.id?.toString());
 
-    const otherMemberId = chat.members?.find(m => m.toString() !== currentUser?.id?.toString());
+    if (!otherMemberId) return chat.name || "Chat";
 
-    if (!otherMemberId) return chat.name || "Чат";
-
-    const otherUser = users.find(u => u.id.toString() === otherMemberId.toString());
-    if (otherUser) {
-      return otherUser.firstName
-        ? `${otherUser.firstName} ${otherUser.lastName || ''}`.trim()
-        : (otherUser.company_name || otherUser.email || `Пользователь ${otherMemberId}`);
+    const otherUserId = Number(otherMemberId);
+    
+    // Check cache first
+    if (senderNames.has(otherUserId)) {
+      return senderNames.get(otherUserId);
     }
 
-    return usersLoading ? "Загрузка..." : (chat.name || `Пользователь ${otherMemberId}`);
+    // Check users array
+    const otherUser = users.find(u => (u?.user_id || u?.id)?.toString() === otherMemberId.toString());
+    if (otherUser) {
+      return getUserDisplayName(otherUser);
+    }
+
+    return usersLoading ? "Loading..." : (chat.name || `User ${otherMemberId}`);
   };
 
   const filteredChats = (chats || []).filter((chat) =>
@@ -567,11 +774,11 @@ export default function ChatPage() {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
-    const getUserLabel = (user: any) => user.firstName ? `${user.firstName} ${user.lastName}` : (user.company_name || user.email || "Без имени");
+    // Use the global getUserDisplayName function
 
     // Filter users based on search
     const filteredUsers = users.filter((user) =>
-      getUserLabel(user).toLowerCase().includes(search.toLowerCase())
+      getUserDisplayName(user).toLowerCase().includes(search.toLowerCase())
     );
 
     const handleSelect = (userId: string) => {
@@ -589,10 +796,10 @@ export default function ChatPage() {
 
     const displayValue = multiple
       ? (Array.isArray(value) && value.length > 0
-        ? `${value.length} выбрано`
+        ? `${value.length} selected`
         : placeholder)
-      : (users.find((u) => u.id.toString() === value)
-        ? getUserLabel(users.find((u) => u.id.toString() === value))
+      : (users.find((u) => (u?.user_id || u?.id)?.toString() === value)
+        ? getUserDisplayName(users.find((u) => (u?.user_id || u?.id)?.toString() === value))
         : placeholder);
 
     return (
@@ -615,14 +822,15 @@ export default function ChatPage() {
               <CommandEmpty>Пользователь не найден.</CommandEmpty>
               <CommandGroup>
                 {filteredUsers.map((user) => {
+                  const userId = (user?.user_id || user?.id)?.toString() || '';
                   const isSelected = multiple
-                    ? (Array.isArray(value) && value.includes(user.id.toString()))
-                    : value === user.id.toString();
+                    ? (Array.isArray(value) && value.includes(userId))
+                    : value === userId;
                   return (
                     <CommandItem
-                      key={user.id}
-                      value={getUserLabel(user)}
-                      onSelect={() => handleSelect(user.id.toString())}
+                      key={user?.user_id || user?.id || 'unknown'}
+                      value={getUserDisplayName(user)}
+                      onSelect={() => handleSelect(userId)}
                     >
                       <Check
                         className={cn(
@@ -630,7 +838,7 @@ export default function ChatPage() {
                           isSelected ? "opacity-100" : "opacity-0"
                         )}
                       />
-                      {getUserLabel(user)}
+                      {getUserDisplayName(user)}
                     </CommandItem>
                   );
                 })}
@@ -723,7 +931,9 @@ export default function ChatPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Создать чат</DialogTitle>
+                  <DialogTitle>
+                    {selectedUserInfo?.is_group ? 'Информация о группе' : 'Информация о пользователе'}
+                  </DialogTitle>
                 </DialogHeader>
                 <Tabs defaultValue="personal">
                   <TabsList className="grid w-full grid-cols-2">
@@ -734,7 +944,7 @@ export default function ChatPage() {
                     <div className="py-4">
                       <Label htmlFor="user">Выберите пользователя</Label>
                       <UserSelect
-                        users={users.filter(u => u.id.toString() !== currentUser?.id)}
+                        users={users.filter(u => (u?.user_id || u?.id)?.toString() !== currentUser?.id)}
                         value={createPersonalChatUserId || ""}
                         onChange={(val) => setCreatePersonalChatUserId(val as string)}
                         placeholder="Поиск..."
@@ -767,7 +977,7 @@ export default function ChatPage() {
                             <div>Загрузка...</div>
                           ) : (
                             <UserSelect
-                              users={users.filter(u => u.id.toString() !== currentUser?.id)}
+                              users={users.filter(u => (u?.user_id || u?.id)?.toString() !== currentUser?.id)}
                               value={createGroupChatMembers.map(String)}
                               onChange={(val) => setCreateGroupChatMembers(val as string[])}
                               multiple
@@ -777,10 +987,10 @@ export default function ChatPage() {
                           {createGroupChatMembers.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-2">
                               {createGroupChatMembers.map(id => {
-                                const user = users.find(u => u.id.toString() === id);
+                                const user = users.find(u => (u?.user_id || u?.id)?.toString() === id);
                                 return user ? (
                                   <Badge key={id} variant="secondary" className="flex items-center gap-1">
-                                    {user.company_name || user.email || user.firstName || "Без имени"}
+                                    {getUserDisplayName(user)}
                                     <X
                                       className="h-3 w-3 cursor-pointer hover:text-red-500"
                                       onClick={() => setCreateGroupChatMembers(prev => prev.filter(m => m !== id))}
@@ -903,20 +1113,28 @@ export default function ChatPage() {
                       </svg>
                     </Button>
                     <div className="relative">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-full"
-                        onClick={() => handleShowUserInfo(selectedChat)}
-                        disabled={selectedChat.is_group}
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={''} />
-                          <AvatarFallback>
-                            {selectedChat.is_group ? <Users className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
-                          </AvatarFallback>
-                        </Avatar>
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 rounded-full hover:bg-gray-100"
+                              onClick={() => handleShowUserInfo(selectedChat)}
+                            >
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={''} />
+                                <AvatarFallback>
+                                  {selectedChat.is_group ? <Users className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
+                                </AvatarFallback>
+                              </Avatar>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{selectedChat.is_group ? 'View group information' : 'View user information'}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       {selectedChat.online && (
                         <div
                           className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-green-500`}
@@ -929,7 +1147,7 @@ export default function ChatPage() {
                         {selectedChat.is_group
                           ? `${selectedChat.members?.length || 0} участников`
                           : (() => {
-                            const otherMemberId = selectedChat.members?.find(m => m.toString() !== currentUser?.id);
+                            const otherMemberId = selectedChat.members?.find(m => m?.toString() !== currentUser?.id?.toString());
                             const status = selectedChat.member_statuses?.find(s => s.user_id === otherMemberId);
                             return status?.is_online ? <span className="text-green-600">В сети</span> : 'Не в сети';
                           })()
@@ -1021,19 +1239,18 @@ export default function ChatPage() {
                         );
                       }
 
-                      // Find sender user for group chats
-                      const senderUser = users.find(u => u.id.toString() === msg?.sender_id?.toString());
-                      const senderName = senderUser
-                        ? (senderUser.firstName ? `${senderUser.firstName} ${senderUser.lastName || ''}`.trim() : (senderUser.company_name || senderUser.email))
-                        : "Неизвестный";
+                      // Get sender name from cache
+                      const senderName = msg?.sender_id 
+                        ? (senderNames.get(msg.sender_id) || `User ${msg.sender_id}`)
+                        : "Unknown";
                       
                       console.log('Sender name debug:', {
                         messageSenderId: msg?.sender_id,
                         isCurrentUser,
                         isGroupChat: selectedChat?.is_group,
-                        senderUser: senderUser,
                         senderName: senderName,
-                        selectedChat: selectedChat
+                        selectedChat: selectedChat,
+                        senderNamesCache: Array.from(senderNames.entries())
                       });
 
                       acc.push(
@@ -1042,7 +1259,12 @@ export default function ChatPage() {
                           className={`flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'} mb-3 w-full`}
                         >
                           {!isCurrentUser && (
-                            <span className="text-xs text-muted-foreground ml-2 mb-1">{senderName}</span>
+                            <button
+                              onClick={() => handleShowUserInfoBySenderId(msg.sender_id)}
+                              className="text-xs text-muted-foreground ml-2 mb-1 hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+                            >
+                              {senderName}
+                            </button>
                           )}
                           <div
                             className={`max-w-[85%] md:max-w-[70%] px-4 py-2 rounded-2xl shadow-sm relative ${isCurrentUser
@@ -1152,7 +1374,9 @@ export default function ChatPage() {
       {selectedChat && <Dialog open={isAddMembersModalOpen} onOpenChange={setIsAddMembersModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Добавить участников</DialogTitle>
+            <DialogTitle>
+              {selectedUserInfo?.is_group ? 'Информация о группе' : 'Информация о пользователе'}
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <Label>Участники</Label>
@@ -1160,16 +1384,16 @@ export default function ChatPage() {
               {usersLoading ? (
                 <div>Загрузка...</div>
               ) : (
-                users.filter(u => u.id.toString() !== currentUser?.id && !selectedChat.members.includes(parseInt(u.id))).map(user => (
-                  <div key={user.id} className="flex items-center space-x-2">
-                    <Input type="checkbox" id={`add-user-${user.id}`} onChange={e => {
+                users.filter(u => u?.id?.toString() !== currentUser?.id && !selectedChat.members.includes(parseInt(u?.id || 0))).map(user => (
+                  <div key={user?.id || 'unknown'} className="flex items-center space-x-2">
+                    <Input type="checkbox" id={`add-user-${user?.id}`} onChange={e => {
                       if (e.target.checked) {
-                        setAddMembersList([...addMembersList, user.id]);
+                        setAddMembersList([...addMembersList, user?.id || 0]);
                       } else {
-                        setAddMembersList(addMembersList.filter(id => id !== user.id));
+                        setAddMembersList(addMembersList.filter(id => id !== user?.id));
                       }
                     }} />
-                    <Label htmlFor={`add-user-${user.id}`}>{user.firstName} {user.lastName}</Label>
+                    <Label htmlFor={`add-user-${user?.id}`}>{user?.firstName} {user?.lastName}</Label>
                   </div>
                 ))
               )}
@@ -1186,7 +1410,9 @@ export default function ChatPage() {
       <Dialog open={isUserInfoModalOpen} onOpenChange={setIsUserInfoModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Информация о пользователе</DialogTitle>
+            <DialogTitle>
+              {selectedUserInfo?.is_group ? 'Информация о группе' : 'Информация о пользователе'}
+            </DialogTitle>
           </DialogHeader>
           {selectedUserInfo && (
             <div className="space-y-6">
@@ -1195,92 +1421,183 @@ export default function ChatPage() {
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={''} />
                   <AvatarFallback className="text-lg">
-                    {selectedUserInfo.firstName 
-                      ? `${selectedUserInfo.firstName[0]}${selectedUserInfo.lastName?.[0] || ''}`.toUpperCase()
-                      : (selectedUserInfo.company_name?.[0] || selectedUserInfo.email?.[0] || 'U').toUpperCase()
-                    }
+                    {selectedUserInfo.is_group ? (
+                      <Users className="h-8 w-8" />
+                    ) : (
+                      (() => {
+                        const displayName = getUserDisplayName(selectedUserInfo);
+                        const initials = displayName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+                        return initials || 'U';
+                      })()
+                    )}
                   </AvatarFallback>
                 </Avatar>
                 <div className="text-center">
                   <h3 className="text-lg font-semibold">
-                    {selectedUserInfo.firstName 
-                      ? `${selectedUserInfo.firstName} ${selectedUserInfo.lastName || ''}`.trim()
-                      : selectedUserInfo.company_name || 'Пользователь'
-                    }
+                    {selectedUserInfo.is_group ? selectedUserInfo.name : getUserDisplayName(selectedUserInfo)}
                   </h3>
-                  {selectedUserInfo.email && (
-                    <p className="text-sm text-muted-foreground">{selectedUserInfo.email}</p>
+                  {selectedUserInfo.is_group ? (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedUserInfo.member_count} participants
+                    </p>
+                  ) : (
+                    selectedUserInfo.email && (
+                      <p className="text-sm text-muted-foreground">{selectedUserInfo.email}</p>
+                    )
                   )}
                 </div>
               </div>
 
               {/* Contact Information */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-muted-foreground">Контактная информация</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  {selectedUserInfo.is_group ? 'Group Information' : 'Contact Information'}
+                </h4>
                 <div className="space-y-3">
-                  {selectedUserInfo.email && (
-                    <div className="flex items-center space-x-3">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedUserInfo.email}</span>
-                    </div>
-                  )}
-                  {selectedUserInfo.phone && (
-                    <div className="flex items-center space-x-3">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedUserInfo.phone}</span>
-                    </div>
-                  )}
-                  {selectedUserInfo.company_name && (
-                    <div className="flex items-center space-x-3">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedUserInfo.company_name}</span>
-                    </div>
+                  {selectedUserInfo.is_group ? (
+                    <>
+                      <div className="flex items-center space-x-3">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{selectedUserInfo.member_count} participants</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">Group Chat</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {selectedUserInfo.email && (
+                        <div className="flex items-center space-x-3">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{selectedUserInfo.email}</span>
+                        </div>
+                      )}
+                      {selectedUserInfo.phone && (
+                        <div className="flex items-center space-x-3">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{selectedUserInfo.phone}</span>
+                        </div>
+                      )}
+                      {selectedUserInfo.company_name && (
+                        <div className="flex items-center space-x-3">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{selectedUserInfo.company_name}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
 
+              {/* Group Participants */}
+              {selectedUserInfo.is_group && selectedUserInfo.participants && (
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-muted-foreground">Participants</h4>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {selectedUserInfo.participants.map((participant: any) => (
+                      <div
+                        key={participant?.user_id || participant?.id || 'unknown'}
+                        className="flex items-center justify-between p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => handleViewParticipant(participant)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={''} />
+                            <AvatarFallback className="text-xs">
+                              {(() => {
+                                const displayName = getUserDisplayName(participant);
+                                const initials = displayName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+                                return initials || 'U';
+                              })()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="text-sm font-medium">{getUserDisplayName(participant)}</p>
+                            {participant.email && (
+                              <p className="text-xs text-muted-foreground">{participant.email}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {participant.is_online !== undefined && (
+                            <div className={`w-2 h-2 rounded-full ${participant.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          )}
+                          {participant.company_name && (
+                            <span className="text-xs text-muted-foreground">{participant.company_name}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Additional Information */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-muted-foreground">Дополнительная информация</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  {selectedUserInfo.is_group ? 'Group Details' : 'Additional Information'}
+                </h4>
                 <div className="space-y-3">
                   <div className="flex items-center space-x-3">
                     <UserIcon className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">ID: {selectedUserInfo.id}</span>
                   </div>
-                  {selectedUserInfo.bin_iin && (
-                    <div className="flex items-center space-x-3">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">БИН/ИИН: {selectedUserInfo.bin_iin}</span>
-                    </div>
-                  )}
-                  {selectedUserInfo.is_verified !== undefined && (
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        Статус: {selectedUserInfo.is_verified ? 'Подтвержден' : 'Не подтвержден'}
-                      </span>
-                    </div>
-                  )}
-                  {selectedUserInfo.verified_at && (
-                    <div className="flex items-center space-x-3">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        Верифицирован: {new Date(selectedUserInfo.verified_at).toLocaleDateString('ru-RU')}
-                      </span>
-                    </div>
+                  {selectedUserInfo.is_group ? (
+                    <>
+                      {selectedUserInfo.created_at && (
+                        <div className="flex items-center space-x-3">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">
+                            Created: {new Date(selectedUserInfo.created_at).toLocaleDateString('ru-RU')}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center space-x-3">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">Type: Group Chat</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {selectedUserInfo.bin_iin && (
+                        <div className="flex items-center space-x-3">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">BIN/IIN: {selectedUserInfo.bin_iin}</span>
+                        </div>
+                      )}
+                      {selectedUserInfo.is_verified !== undefined && (
+                        <div className="flex items-center space-x-3">
+                          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">
+                            Status: {selectedUserInfo.is_verified ? 'Verified' : 'Not verified'}
+                          </span>
+                        </div>
+                      )}
+                      {selectedUserInfo.verified_at && (
+                        <div className="flex items-center space-x-3">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">
+                            Verified: {new Date(selectedUserInfo.verified_at).toLocaleDateString('ru-RU')}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
 
               {/* Status */}
-              <div className="flex items-center justify-center">
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${selectedUserInfo.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                  <span className="text-sm text-muted-foreground">
-                    {selectedUserInfo.is_online ? 'В сети' : 'Не в сети'}
-                  </span>
+              {!selectedUserInfo.is_group && (
+                <div className="flex items-center justify-center">
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${selectedUserInfo.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                    <span className="text-sm text-muted-foreground">
+                      {selectedUserInfo.is_online ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
           <DialogFooter>
