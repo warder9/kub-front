@@ -109,11 +109,12 @@ type EntityType = "deal" | "lead"
 // Helper function to map role_id to role name (same as sidebar)
 function getRoleFromId(roleId: number): string {
   const roleMapping: Record<number, string> = {
-    40: 'management',
-    30: 'admin',
-    20: 'control',
-    10: 'sales',
-    5: 'user'
+    50: 'system_admin',
+    40: 'leadership',
+    30: 'control',
+    20: 'operations',
+    15: 'backoffice_admin_staff',
+    10: 'sales'
   }
   return roleMapping[roleId] || 'user'
 }

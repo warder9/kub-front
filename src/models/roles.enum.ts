@@ -1,23 +1,26 @@
 export enum Roles {
-  USER = 5,
   SALES = 10,
-  CONTROL = 20,
-  ADMIN = 30,
+  BACKOFFICE_STAFF = 15,
+  OPERATIONS = 20,
+  CONTROL = 30,
   MANAGEMENT = 40,
+  SYSTEM_ADMIN = 50,
 }
 
 export const getRoleName = (roleId: number) => {
   switch (roleId) {
-    case Roles.ADMIN:
-      return "Администратор";
+    case Roles.SYSTEM_ADMIN:
+      return "Системный администратор";
     case Roles.MANAGEMENT:
       return "Руководство";
     case Roles.CONTROL:
       return "Отдел контроля";
+    case Roles.OPERATIONS:
+      return "Операционный отдел";
+    case Roles.BACKOFFICE_STAFF:
+      return "Административный персонал";
     case Roles.SALES:
       return "Отдел продаж";
-    case Roles.USER:
-      return "Пользователь";
     default:
       return "Неизвестная роль";
   }

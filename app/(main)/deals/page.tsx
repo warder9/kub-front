@@ -135,11 +135,12 @@ export default function DealsPage() {
   // Helper function to map role_id to role name (same as sidebar)
   function getRoleFromId(roleId: number): string {
     const roleMapping: Record<number, string> = {
-      40: 'management',
-      30: 'admin',
-      20: 'control',
-      10: 'sales',
-      5: 'user'
+      50: 'system_admin',
+      40: 'leadership',
+      30: 'control',
+      20: 'operations',
+      15: 'backoffice_admin_staff',
+      10: 'sales'
     }
     return roleMapping[roleId] || 'user'
   }
@@ -215,8 +216,8 @@ export default function DealsPage() {
       const currentUser = getCurrentUser();
       const userRole = currentUser?.role || user?.role;
       
-      // Only allow 'all' view for admin and management roles explicitly
-      const effectiveView = (userRole === 'admin' || userRole === 'management') ? 'all' : 'my';
+      // Only allow 'all' view for system_admin and leadership roles explicitly
+      const effectiveView = (userRole === 'system_admin' || userRole === 'leadership') ? 'all' : 'my';
       
       console.log('fetchDeals called:', { 
         userRole,
@@ -418,11 +419,11 @@ export default function DealsPage() {
           console.log('Deals page - loading leads for user:', currentUser?.role);
           console.log('Current user object:', currentUser);
           
-          // Use list_my_leads for non-admin/manager users, with fallback for 403 errors
+          // Use list_my_leads for non-system_admin/leadership users, with fallback for 403 errors
           let leadsRes;
-          if (currentUser?.role === 'admin' || currentUser?.role === 'manager') {
+          if (currentUser?.role === 'system_admin' || currentUser?.role === 'leadership') {
             try {
-              console.log('Attempting to use list_leads for admin/manager user');
+              console.log('Attempting to use list_leads for system_admin/leadership user');
               leadsRes = await list_leads();
               console.log('list_leads response:', leadsRes);
             } catch (leadsError: any) {
@@ -435,7 +436,7 @@ export default function DealsPage() {
               }
             }
           } else {
-            console.log('Using list_my_leads for non-admin/manager user (sales/restricted)');
+            console.log('Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
             leadsRes = await list_my_leads();
             console.log('list_my_leads response:', leadsRes);
           }
@@ -452,8 +453,8 @@ export default function DealsPage() {
           console.error("Error loading leads:", err);
         }
 
-        // Load users (for responsible) - only for admin/manager
-        if (userData && (userData.role === "admin" || userData.role === "manager")) {
+        // Load users (for responsible) - only for system_admin/leadership
+        if (userData && (userData.role === "system_admin" || userData.role === "leadership")) {
           try {
             const { listUsers } = await import("@/src/api/users.api");
             const res = await listUsers();
@@ -483,7 +484,7 @@ export default function DealsPage() {
             }
           }
         } else {
-          // For non-admin/manager users, only include current user in dropdown
+          // For non-system_admin/leadership users, only include current user in dropdown
           if (userData) {
             const currentUserForDropdown = {
               id: parseInt(userData.id) || userData.id,
@@ -559,13 +560,13 @@ export default function DealsPage() {
       const currentUser = getCurrentUser();
       console.log('Manual refresh - current user role:', currentUser?.role);
       
-      // Use list_my_leads for non-admin/manager users to avoid 403 errors
+      // Use list_my_leads for non-system_admin/leadership users to avoid 403 errors
       let leadsRes;
-      if (currentUser?.role === 'admin' || currentUser?.role === 'manager') {
-        console.log('MANUAL REFRESH: Using list_leads for admin/manager user');
+      if (currentUser?.role === 'system_admin' || currentUser?.role === 'leadership') {
+        console.log('MANUAL REFRESH: Using list_leads for system_admin/leadership user');
         leadsRes = await list_leads();
       } else {
-        console.log('MANUAL REFRESH: Using list_my_leads for non-admin/manager user (sales/restricted)');
+        console.log('MANUAL REFRESH: Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
         leadsRes = await list_my_leads();
       }
         
@@ -799,7 +800,7 @@ export default function DealsPage() {
     try {
       const userData = getCurrentUser();
       if (userData) {
-        const res = userData.role === "admin" || userData.role === "manager"
+        const res = userData.role === "system_admin" || userData.role === "leadership"
           ? await ClientAPI.listClients()
           : await ClientAPI.listMyClients();
         const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];

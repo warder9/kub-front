@@ -39,7 +39,7 @@ export default function RegisterPage() {
     email: "",
     password: "",
     phone: "",
-    role_id: 5, // Default to sales role
+    role_id: 10, // Default to sales role
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +57,8 @@ export default function RegisterPage() {
         const rolesList = Array.isArray(response) ? response : response.data || [];
         // Filter out management roles for regular registration
         const publicRoles = rolesList.filter(role => 
-          !role.name.toLowerCase().includes('management') && 
+          !role.name.toLowerCase().includes('leadership') && 
+          !role.name.toLowerCase().includes('system_admin') &&
           !role.name.toLowerCase().includes('admin')
         );
         setRoles(publicRoles);
@@ -65,9 +66,9 @@ export default function RegisterPage() {
         console.error("Failed to fetch roles:", error);
         // Fallback to default roles if API fails
         setRoles([
-          { id: 5, name: "sales", description: "Менеджер по продажам", created_at: "", updated_at: "" },
-          { id: 10, name: "operations", description: "Операционный менеджер", created_at: "", updated_at: "" },
-          { id: 20, name: "control", description: "Контроль качества", created_at: "", updated_at: "" },
+          { id: 10, name: "sales", description: "Менеджер по продажам", created_at: "", updated_at: "" },
+          { id: 20, name: "operations", description: "Операционный отдел", created_at: "", updated_at: "" },
+          { id: 30, name: "control", description: "Отдел контроля", created_at: "", updated_at: "" },
         ]);
       } finally {
         setRolesLoading(false);

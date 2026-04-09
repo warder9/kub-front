@@ -141,11 +141,12 @@ export default function LeadsPage() {
   // Helper function to map role_id to role name (same as sidebar)
   function getRoleFromId(roleId: number): string {
     const roleMapping: Record<number, string> = {
-      40: 'management',
-      30: 'admin',
-      20: 'control',
-      10: 'sales',
-      5: 'user'
+      50: 'system_admin',
+      40: 'leadership',
+      30: 'control',
+      20: 'operations',
+      15: 'backoffice_admin_staff',
+      10: 'sales'
     }
     return roleMapping[roleId] || 'user'
   }
@@ -335,7 +336,7 @@ export default function LeadsPage() {
       console.log('Still no user found, creating mock user for testing...');
       user = {
         id: '1',
-        role: 'admin',
+        role: 'system_admin',
         firstName: 'Test',
         lastName: 'User',
         email: 'test@example.com'

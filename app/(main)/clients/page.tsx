@@ -160,7 +160,7 @@ export default function ClientsPage() {
   const [clientView, setClientView] = useState<"all" | "my">(() => {
     // Initialize with correct view based on user role
     const currentUser = getCurrentUser();
-    return (currentUser?.role === 'sales' || currentUser?.role_id === 5) ? 'my' : 'all';
+    return (currentUser?.role === 'sales' || currentUser?.role_id === 10) ? 'my' : 'all';
   });
   
   // State for fresh user data from API
@@ -198,11 +198,12 @@ export default function ClientsPage() {
           lastName: '',
           email: userData.email,
           phone: userData.phone,
-          role: userData.role_id === 40 ? 'management' : 
-                userData.role_id === 5 ? 'sales' : 
-                userData.role_id === 10 ? 'operations' : 
-                userData.role_id === 20 ? 'control' : 
-                userData.role_id === 30 ? 'admin' : 'user',
+          role: userData.role_id === 50 ? 'system_admin' :
+                userData.role_id === 40 ? 'leadership' :
+                userData.role_id === 30 ? 'control' :
+                userData.role_id === 20 ? 'operations' :
+                userData.role_id === 15 ? 'backoffice_admin_staff' :
+                userData.role_id === 10 ? 'sales' : 'user',
           role_id: userData.role_id,
           company_name: userData.company_name,
           bin_iin: userData.bin_iin,
@@ -244,10 +245,10 @@ export default function ClientsPage() {
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
-      let effectiveView = (currentUser?.role === 'sales' || currentUser?.role_id === 5) ? 'my' : clientView;
+      let effectiveView = (currentUser?.role === 'sales' || currentUser?.role_id === 10) ? 'my' : clientView;
       
       // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
-      if (currentUser?.role === 'sales' || currentUser?.role_id === 5) {
+      if (currentUser?.role === 'sales' || currentUser?.role_id === 10) {
         effectiveView = 'my';
         console.log('SAFEGUARD: Forced to my view for sales user');
       }
@@ -260,7 +261,7 @@ export default function ClientsPage() {
         endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
         params,
         'currentUser?.role === "sales"': currentUser?.role === 'sales',
-        'currentUser?.role_id === 5': currentUser?.role_id === 5,
+        'currentUser?.role_id === 10': currentUser?.role_id === 10,
         'effectiveView === "all"': effectiveView === "all",
         'calling listClients?': effectiveView === "all"
       });
@@ -275,7 +276,7 @@ export default function ClientsPage() {
       // More robust role check - handle different formats and undefined roles
       const userRole = currentUser?.role;
       const userId = currentUser?.role_id;
-      const isSalesRole = (!userRole && !userId) || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales' || userId === 5;
+      const isSalesRole = (!userRole && !userId) || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales' || userId === 10;
       
       console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
       
@@ -362,7 +363,7 @@ export default function ClientsPage() {
     const currentUser = getCurrentUser();
     console.log('Initial user check:', currentUser);
     
-    if ((currentUser?.role === 'sales' || currentUser?.role_id === 5) && clientView === 'all') {
+    if ((currentUser?.role === 'sales' || currentUser?.role_id === 10) && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
@@ -372,7 +373,7 @@ useEffect(() => {
     console.log('=== USEEFFECT 1: User/Role Change ===');
     console.log('User:', user);
     console.log('Client view:', clientView);
-    if ((user?.role === 'sales' || user?.role_id === 5) && clientView === 'all') {
+    if ((user?.role === 'sales' || user?.role_id === 10) && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }

@@ -298,7 +298,7 @@ function ComboboxSelect({
 // ─── Role helper ─────────────────────────────────────────────────
 
 function getRoleKey(roleId?: number): string {
-    const map: Record<number, string> = { 40: "management", 30: "admin", 20: "control", 10: "sales", 5: "user" }
+    const map: Record<number, string> = { 50: "system_admin", 40: "leadership", 30: "control", 20: "operations", 15: "backoffice_admin_staff", 10: "sales" }
     return map[roleId || 0] || "user"
 }
 
@@ -340,11 +340,12 @@ export default function DocumentsPage() {
                     lastName: '',
                     email: userData.email,
                     phone: userData.phone,
-                    role: userData.role_id === 40 ? 'management' : 
-                          userData.role_id === 10 ? 'sales' : 
-                          userData.role_id === 20 ? 'control' : 
-                          userData.role_id === 30 ? 'admin' : 
-                          userData.role_id === 5 ? 'user' : 'user',
+                    role: userData.role_id === 50 ? 'system_admin' :
+                          userData.role_id === 40 ? 'leadership' :
+                          userData.role_id === 30 ? 'control' :
+                          userData.role_id === 20 ? 'operations' :
+                          userData.role_id === 15 ? 'backoffice_admin_staff' :
+                          userData.role_id === 10 ? 'sales' : 'user',
                     role_id: userData.role_id,
                     company_name: userData.company_name,
                     bin_iin: userData.bin_iin,
@@ -452,9 +453,9 @@ export default function DocumentsPage() {
         }
     }, [fetchDocuments, freshUserData])
 
-    // Load clients and deals for sales, management, control, and operations users
+    // Load clients and deals for sales, leadership, control, and operations users
     useEffect(() => {
-        if (freshUserData && (user?.role === 'sales' || user?.role === 'management' || user?.role === 'control' || user?.role === 'operations')) {
+        if (freshUserData && (user?.role === 'sales' || user?.role === 'leadership' || user?.role === 'control' || user?.role === 'operations')) {
             const loadUserData = async () => {
                 try {
                     console.log(`Loading clients and deals for ${user?.role} user...`);

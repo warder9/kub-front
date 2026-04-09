@@ -57,7 +57,7 @@ const EMPTY_USER: Models.CreateUserRequest = {
   email: "",
   password: "",
   phone: "",
-  role_id: Roles.USER,
+  role_id: Roles.SALES,
 };
 
 const DetailItem = ({ label, value }: { label: string; value?: string | number | null | boolean }) => (
@@ -102,12 +102,12 @@ export default function UsersPage() {
     setIsLoading(true);
     setError("");
     try {
-      const [usersResponse, totalCount, admin, manager, user] = await Promise.all([
+      const [usersResponse, totalCount, systemAdmin, leadership, sales] = await Promise.all([
         UserAPI.listUsers(currentPage, limit),
         UserAPI.getUsersCount(), // We might use this or response total
-        UserAPI.getUsersCountByRole(Roles.ADMIN),
+        UserAPI.getUsersCountByRole(Roles.SYSTEM_ADMIN),
         UserAPI.getUsersCountByRole(Roles.MANAGEMENT),
-        UserAPI.getUsersCountByRole(Roles.USER),
+        UserAPI.getUsersCountByRole(Roles.SALES),
       ]);
 
       const usersData = Array.isArray(usersResponse) ? usersResponse : (usersResponse as any).data || [];
@@ -116,9 +116,9 @@ export default function UsersPage() {
       setUsers(usersData);
       setStats({
         total: totalUsers,
-        admin: admin.count,
-        manager: manager.count,
-        user: user.count
+        admin: systemAdmin.count,
+        manager: leadership.count,
+        user: sales.count
       });
     } catch (err: any) {
       const errorMessage = err?.message || "Ошибка при загрузке пользователей";
@@ -147,7 +147,7 @@ export default function UsersPage() {
         // Filter out invalid roles and only keep valid ones
         const validRoles = rolesData.filter(role => {
           const roleId = Number(role.id);
-          return [5, 10, 20, 30, 40].includes(roleId); // Only valid role IDs
+          return [10, 15, 20, 30, 40, 50].includes(roleId); // Only valid role IDs
         });
         
         console.log('Filtered roles:', validRoles);
@@ -171,16 +171,18 @@ export default function UsersPage() {
     
     // Use frontend role mapping for consistency
     switch (id) {
-      case 5:
-        return "Пользователь";
       case 10:
         return "Отдел продаж";
+      case 15:
+        return "Административный персонал";
       case 20:
-        return "Отдел контроля";
+        return "Операционный отдел";
       case 30:
-        return "Администратор";
+        return "Отдел контроля";
       case 40:
         return "Руководство";
+      case 50:
+        return "Системный администратор";
       default:
         return "Неизвестная роль";
     }
@@ -273,8 +275,8 @@ export default function UsersPage() {
         toast({ title: "Успех", description: "Пользователь успешно обновлен." });
       } else {
         const payload = { ...userFormData } as Models.CreateUserRequest;
-        // Auto-verify if created by Manager or Admin only
-        if (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) {
+        // Auto-verify if created by Leadership or System Admin only
+        if (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) {
           payload.is_verified = true;
         }
         await UserAPI.createUser(payload);
@@ -509,8 +511,8 @@ export default function UsersPage() {
                 />
               </div>
 
-              {/* Verification Switch: Visible for editing, or for Managers/Admins when creating (disabled/checked) */}
-              {(editingUser || currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) && (
+              {/* Verification Switch: Visible for editing, or for Leadership/System Admin when creating (disabled/checked) */}
+              {(editingUser || currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) && (
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="is_verified" className="cursor-pointer">Верифицирован</Label>
                   <Switch
@@ -518,9 +520,9 @@ export default function UsersPage() {
                     checked={
                       editingUser
                         ? (userFormData as Models.UpdateUserRequest).is_verified
-                        : (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN) // Auto-checked for Managers/Admins on creation
+                        : (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) // Auto-checked for Leadership/System Admin on creation
                     }
-                    disabled={!editingUser && (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.ADMIN)} // Disabled on creation for Managers
+                    disabled={!editingUser && (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN)} // Disabled on creation for Leadership
                     onCheckedChange={(c) => handleSwitchChange('is_verified', c)}
                   />
                 </div>

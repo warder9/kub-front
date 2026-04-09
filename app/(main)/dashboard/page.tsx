@@ -2,13 +2,20 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to leads as default dashboard page
-    router.push("/leads");
+    const user = getCurrentUser();
+    
+    // Redirect based on role
+    if (user?.role === 'system_admin') {
+      router.push("/users");
+    } else {
+      router.push("/leads");
+    }
   }, [router]);
 
   return (

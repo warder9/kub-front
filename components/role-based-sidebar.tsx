@@ -41,92 +41,256 @@ interface SidebarItem {
   badge?: string;
 }
 
-const sidebarItems: SidebarItem[] = [
-  {
-    title: "Пользователи",
-    href: "/users",
-    icon: UserCheck,
-    permissions: ["users:read"], // Only Management and Admin
-  },
-  {
-    title: "Лиды",
-    href: "/leads",
-    icon: Target,
-    permissions: ["leads:read"], // Sales, Operations, Control, Management, Admin
-  },
-  {
-    title: "Сделки",
-    href: "/deals",
-    icon: Handshake,
-    permissions: ["deals:read"], // Sales, Operations, Control, Management, Admin
-  },
-  {
-    title: "Клиенты",
-    href: "/clients",
-    icon: Users,
-    permissions: ["clients:read"], // Sales, Operations, Control, Management, Admin
-  },
-  {
-    title: "Задачи",
-    href: "/tasks",
-    icon: Calendar,
-    permissions: ["tasks:read"], // All roles (Sales, Operations, Control, Management, Admin)
-  },
-  {
-    title: "Документы",
-    href: "/documents",
-    icon: FileText,
-    permissions: ["documents:read"], // Operations, Control, Management, Admin (Sales only for preparation)
-  },
-  {
-    title: "Чат",
-    href: "/chat",
-    icon: MessageSquare,
-    permissions: [], // All roles (messenger access)
-  },
-  {
-    title: "WhatsApp",
-    href: "/whatsapp",
-    icon: MessageCircle,
-    permissions: [], // All roles (messenger access)
-  },
-  {
-    title: "Аналитика",
-    href: "/analytics",
-    icon: BarChart3,
-    permissions: ["analytics:read"], // Control, Management, Admin
-  },
-  {
-    title: "Роли",
-    href: "/roles",
-    icon: Shield,
-    permissions: ["users:write"], // Only Admin and Management
-  },
-  {
-    title: "Telegram Бот",
-    href: "/telegram",
-    icon: Send,
-    permissions: ["settings:write"], // Only Admin
-  },
-];
+const sidebarItems: Record<string, SidebarItem[]> = {
+  system_admin: [
+    {
+      title: "Пользователи",
+      href: "/users",
+      icon: UserCheck,
+      permissions: ["users:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "Роли",
+      href: "/roles",
+      icon: Shield,
+      permissions: ["users:write"],
+    },
+  ],
+  leadership: [
+    {
+      title: "Лиды",
+      href: "/leads",
+      icon: Target,
+      permissions: ["leads:read"],
+    },
+    {
+      title: "Сделки",
+      href: "/deals",
+      icon: Handshake,
+      permissions: ["deals:read"],
+    },
+    {
+      title: "Клиенты",
+      href: "/clients",
+      icon: Users,
+      permissions: ["clients:read"],
+    },
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Документы",
+      href: "/documents",
+      icon: FileText,
+      permissions: ["documents:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "WhatsApp",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+    {
+      title: "Аналитика",
+      href: "/analytics",
+      icon: BarChart3,
+      permissions: ["analytics:read"],
+    },
+  ],
+  control: [
+    {
+      title: "Лиды",
+      href: "/leads",
+      icon: Target,
+      permissions: ["leads:read"],
+    },
+    {
+      title: "Сделки",
+      href: "/deals",
+      icon: Handshake,
+      permissions: ["deals:read"],
+    },
+    {
+      title: "Клиенты",
+      href: "/clients",
+      icon: Users,
+      permissions: ["clients:read"],
+    },
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Документы",
+      href: "/documents",
+      icon: FileText,
+      permissions: ["documents:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "WhatsApp",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+    {
+      title: "Аналитика",
+      href: "/analytics",
+      icon: BarChart3,
+      permissions: ["analytics:read"],
+    },
+  ],
+  operations: [
+    {
+      title: "Лиды",
+      href: "/leads",
+      icon: Target,
+      permissions: ["leads:read"],
+    },
+    {
+      title: "Сделки",
+      href: "/deals",
+      icon: Handshake,
+      permissions: ["deals:read"],
+    },
+    {
+      title: "Клиенты",
+      href: "/clients",
+      icon: Users,
+      permissions: ["clients:read"],
+    },
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Документы",
+      href: "/documents",
+      icon: FileText,
+      permissions: ["documents:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "WhatsApp",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+  ],
+  backoffice_admin_staff: [
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "WhatsApp",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+  ],
+  sales: [
+    {
+      title: "Лиды",
+      href: "/leads",
+      icon: Target,
+      permissions: ["leads:read"],
+    },
+    {
+      title: "Сделки",
+      href: "/deals",
+      icon: Handshake,
+      permissions: ["deals:read"],
+    },
+    {
+      title: "Клиенты",
+      href: "/clients",
+      icon: Users,
+      permissions: ["clients:read"],
+    },
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Документы",
+      href: "/documents",
+      icon: FileText,
+      permissions: ["documents:read"],
+    },
+    {
+      title: "Чат",
+      href: "/chat",
+      icon: MessageSquare,
+      permissions: [],
+    },
+    {
+      title: "WhatsApp",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+  ],
+};
 
 function getRoleFromId(roleId: number): string {
   const roleMapping: Record<number, string> = {
-    40: 'management',
-    30: 'admin',
-    20: 'control',
-    10: 'sales',     // Fixed: role_id 10 should be 'sales' to match admin panel
-    5: 'user'         // Changed: role_id 5 is now 'user' since 10 is sales
+    50: 'system_admin',
+    40: 'leadership',
+    30: 'control',
+    20: 'operations',
+    15: 'backoffice_admin_staff',
+    10: 'sales',
   }
   return roleMapping[roleId] || 'user'
 }
 
 function getRoleDisplayName(roleKey: string): string {
   const roleDisplayNames: Record<string, string> = {
-    'admin': 'Администратор',
-    'management': 'Руководство',
+    'system_admin': 'Системный администратор',
+    'leadership': 'Руководство',
     'operations': 'Операционный отдел',
     'control': 'Отдел контроля',
+    'backoffice_admin_staff': 'Административный персонал',
     'sales': 'Отдел продаж',
     'user': 'Пользователь'
   }
@@ -146,62 +310,54 @@ export function RoleBasedSidebar() {
         // Force fresh data by clearing any cached user data
         localStorage.removeItem('current_user');
         
-        const [userData, rolesData] = await Promise.allSettled([
-          getMe(),
-          RolesAPI.listRoles({ limit: 100 })
-        ]);
+        // Fetch user data first
+        const userDataResult = await getMe();
+        setUser(userDataResult);
         
-        console.log('User data from API:', userData.status === 'fulfilled' ? userData.value : userData.reason);
+        console.log('User data from API:', userDataResult);
         
-        // Handle user data
-        if (userData.status === 'fulfilled') {
-          setUser(userData.value);
-        } else {
-          console.error('Failed to load user data:', userData.reason);
-          return;
-        }
-        
-        // Handle roles data - roles are optional for sidebar functionality
+        // Only fetch roles if user is system_admin (to avoid 403 errors for other roles)
         let roles: { id: number, name: string }[] = [];
-        if (rolesData.status === 'fulfilled') {
-          const rolesResponse = rolesData.value;
-          roles = Array.isArray(rolesResponse) ? rolesResponse : rolesResponse.data || [];
-          console.log('Roles data from API:', roles);
-        } else {
-          console.warn('Roles API not accessible (403 expected for sales users), using empty roles:', rolesData.reason);
+        if (userDataResult.role_id === 50) { // system_admin
+          try {
+            const rolesData = await RolesAPI.listRoles({ limit: 100 });
+            roles = Array.isArray(rolesData) ? rolesData : rolesData.data || [];
+            console.log('Roles data from API:', roles);
+          } catch (err) {
+            console.warn('Failed to fetch roles:', err);
+          }
         }
         setAvailableRoles(roles);
         
-        if (userData.status === 'fulfilled') {
-          const userValue = userData.value;
-          console.log('=== ROLE DEBUG ===');
-          console.log('Raw userData:', userValue);
-          console.log('User role_id (type):', userValue.role_id, typeof userValue.role_id);
-          console.log('Available roles from API:', roles);
-          console.log('Role IDs in available roles:', roles.map(r => ({ id: r.id, name: r.name })));
-          
-          const role = roles.find(r => r.id === userValue.role_id);
-          console.log('Found role in API roles:', role);
-          
-          // Show what admin panel would display
-          const adminPanelRoleName = role ? role.name : "Неизвестная роль";
-          console.log('Admin panel would show:', adminPanelRoleName);
-          
-          // Use API role name to match admin panel, fallback to hardcoded mapping
-          const roleKey = role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userValue.role_id);
-          setUserRole(roleKey);
-          console.log('Using role key:', roleKey);
-          console.log('Display name will be:', adminPanelRoleName || getRoleDisplayName(roleKey));
-          
-          // Test all possible mappings
-          console.log('Testing all role mappings:');
-          console.log('5 ->', getRoleFromId(5), '->', getRoleDisplayName(getRoleFromId(5)));
-          console.log('10 ->', getRoleFromId(10), '->', getRoleDisplayName(getRoleFromId(10)));
-          console.log('20 ->', getRoleFromId(20), '->', getRoleDisplayName(getRoleFromId(20)));
-          console.log('30 ->', getRoleFromId(30), '->', getRoleDisplayName(getRoleFromId(30)));
-          console.log('40 ->', getRoleFromId(40), '->', getRoleDisplayName(getRoleFromId(40)));
-          console.log('=== END ROLE DEBUG ===');
-        }
+        const userValue = userDataResult;
+        console.log('=== ROLE DEBUG ===');
+        console.log('Raw userData:', userValue);
+        console.log('User role_id (type):', userValue.role_id, typeof userValue.role_id);
+        console.log('Available roles from API:', roles);
+        console.log('Role IDs in available roles:', roles.map(r => ({ id: r.id, name: r.name })));
+        
+        const role = roles.find(r => r.id === userValue.role_id);
+        console.log('Found role in API roles:', role);
+        
+        // Show what admin panel would display
+        const adminPanelRoleName = role ? role.name : "Неизвестная роль";
+        console.log('Admin panel would show:', adminPanelRoleName);
+        
+        // Use API role name to match admin panel, fallback to hardcoded mapping
+        const roleKey = role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userValue.role_id);
+        setUserRole(roleKey);
+        console.log('Using role key:', roleKey);
+        console.log('Display name will be:', adminPanelRoleName || getRoleDisplayName(roleKey));
+        
+        // Test all possible mappings
+        console.log('Testing all role mappings:');
+        console.log('10 ->', getRoleFromId(10), '->', getRoleDisplayName(getRoleFromId(10)));
+        console.log('15 ->', getRoleFromId(15), '->', getRoleDisplayName(getRoleFromId(15)));
+        console.log('20 ->', getRoleFromId(20), '->', getRoleDisplayName(getRoleFromId(20)));
+        console.log('30 ->', getRoleFromId(30), '->', getRoleDisplayName(getRoleFromId(30)));
+        console.log('40 ->', getRoleFromId(40), '->', getRoleDisplayName(getRoleFromId(40)));
+        console.log('50 ->', getRoleFromId(50), '->', getRoleDisplayName(getRoleFromId(50)));
+        console.log('=== END ROLE DEBUG ===');
       } catch (error) {
         console.error("Failed to fetch user data", error);
       }
@@ -225,8 +381,13 @@ export function RoleBasedSidebar() {
     fallbackName: getRoleDisplayName(userRoleKey),
     finalDisplay: displayRole
   });
-  const filteredItems = sidebarItems.filter(
-    (item) =>
+  
+  // Get sidebar items for the user's role
+  const roleSidebarItems = sidebarItems[userRoleKey] || sidebarItems['sales'];
+  
+  // Filter by permissions (though role-specific items should already have correct permissions)
+  const filteredItems = roleSidebarItems.filter(
+    (item: SidebarItem) =>
       item.permissions.length === 0 ||
       hasPermission(userRoleKey, item.permissions)
   );

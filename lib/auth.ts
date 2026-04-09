@@ -103,10 +103,11 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
     return true;
   }
 
-  // Маппинг ролей к разрешениям согласно требованиям к уровням доступа
+  // Маппинг ролей к разрешениям согласно требованиям к уровням доступа (backend RBAC)
   const rolePermissions: Record<string, string[]> = {
-    admin: [
-      'users:read',      // Полный доступ ко всем данным системы
+    system_admin: [
+      // Системный администратор: CanManageSystem, CanAssignRoles, CanAccessLogs, CanManageIntegrations
+      'users:read',
       'users:write',
       'leads:read',
       'leads:write',
@@ -114,7 +115,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'deals:write',
       'clients:read',
       'clients:write',
-      'tasks:read',     // Доступ к мессенджеру и задачам
+      'tasks:read',
       'tasks:write',
       'documents:read',
       'documents:write',
@@ -123,8 +124,8 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'settings:read',
       'settings:write',
     ],
-    management: [
-      // Руководство: Полный доступ ко всем данным системы, за исключением сведений о руководстве
+    leadership: [
+      // Руководство: CanViewLeadershipData, CanViewAllBusinessData, CanProcessDocuments, CanWorkWithLeads
       'users:read',
       'leads:read',
       'leads:write',
@@ -138,10 +139,9 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:write',
       'analytics:read',
       'analytics:write',
-      'users:write',     // Управление ролями
     ],
     control: [
-      // Отдел контроля: Просмотр всей информации, за исключением сведений о руководстве
+      // Отдел контроля: CanViewAllBusinessData (read-only)
       'leads:read',
       'deals:read',
       'clients:read',
@@ -150,18 +150,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'analytics:read',
     ],
     operations: [
-      // Операционный отдел: Приём и проверка документов, передача проверенных документов продажникам
-      'leads:read',
-      'deals:read',
-      'clients:read',
-      'clients:write',
-      'tasks:read',
-      'tasks:write',
-      'documents:read',
-      'documents:write',
-    ],
-    sales: [
-      // Продажник: Обработка заявок, доступ к информации по клиентам, подготовка документов, доступ к лидам и продажам
+      // Операционный отдел: CanViewAllBusinessData, CanProcessDocuments, CanWorkWithLeads
       'leads:read',
       'leads:write',
       'deals:read',
@@ -170,8 +159,26 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'clients:write',
       'tasks:read',
       'tasks:write',
-      'documents:read', // Для просмотра документов
-      'documents:write', // Для создания и подготовки документов
+      'documents:read',
+      'documents:write',
+    ],
+    backoffice_admin_staff: [
+      // Административный персонал: CanAccessMessengerOnly, CanAccessTasks
+      'tasks:read',
+      'tasks:write',
+    ],
+    sales: [
+      // Отдел продаж: CanWorkWithLeads
+      'leads:read',
+      'leads:write',
+      'deals:read',
+      'deals:write',
+      'clients:read',
+      'clients:write',
+      'tasks:read',
+      'tasks:write',
+      'documents:read',
+      'documents:write',
     ],
   };
 
@@ -193,10 +200,11 @@ export function hasRole(userRole: string | undefined, requiredRoles: string[]): 
 // Функция для получения роли пользователя в текстовом формате
 export function getUserRoleText(role: string | undefined): string {
   const roleMap: Record<string, string> = {
-    admin: 'Администратор',
-    management: 'Руководство',
-    control: 'Контроль',
+    system_admin: 'Системный администратор',
+    leadership: 'Руководство',
+    control: 'Отдел контроля',
     operations: 'Операционный отдел',
+    backoffice_admin_staff: 'Административный персонал',
     sales: 'Отдел продаж',
   };
   
