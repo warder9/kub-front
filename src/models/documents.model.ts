@@ -35,6 +35,7 @@ export interface Document {
 
 export type Documents_Create_from_client_Request = {
   client_id: number;
+  client_type: string;
   deal_id: number;
   doc_type: string;
   extra?: Record<string, any>;

@@ -465,14 +465,14 @@ export default function DocumentsPage() {
                     if (user?.role === 'sales') {
                         // Sales users get their own data only
                         [clientsRes, dealsRes] = await Promise.all([
-                            ClientAPI.listMyClients({ page: 1, limit: 100 }),
-                            DealsAPI.list_my_deals(undefined, { page: 1, limit: 100 })
+                            ClientAPI.listMyClients({ page: 1, size: 100 }),
+                            DealsAPI.list_my_deals(undefined, { page: 1, size: 100 })
                         ]);
                     } else {
                         // Management, control, and operations users get all data
                         [clientsRes, dealsRes] = await Promise.all([
-                            ClientAPI.listClients({ page: 1, limit: 100 }),
-                            DealsAPI.list_deals(undefined, { page: 1, limit: 100 })
+                            ClientAPI.listClients({ page: 1, size: 100 }),
+                            DealsAPI.list_deals(undefined, { page: 1, size: 100 })
                         ]);
                     }
                     
@@ -541,16 +541,21 @@ export default function DocumentsPage() {
         
         const clientId = Number(createForm.client_id);
         const dealId = Number(createForm.deal_id);
-        
+
         if (isNaN(clientId) || isNaN(dealId)) {
             toast.error("Неверные ID клиента или сделки")
             return
         }
-        
+
+        // Get client_type from the selected client
+        const selectedClient = clients.find(c => c.id === clientId);
+        const clientType = selectedClient?.client_type || "individual";
+
         // Only validate truly required fields (backend will handle optional ones)
         // Backend auto-fills optional fields and provides defaults
         const payload: any = {
             client_id: clientId,
+            client_type: clientType,
             deal_id: dealId,
             doc_type: createForm.doc_type,
             ...(Object.keys(createForm.extra).length > 0 && { extra: createForm.extra }),

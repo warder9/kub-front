@@ -84,6 +84,13 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   contact_info: "",
   client_type: "individual",
 
+  // Legal entity banking fields
+  contact_person_position: "",
+  bank_name: "",
+  iban: "",
+  bik: "",
+  kbe: "",
+
   // Required fields (RED)
   country: "",
   trip_purpose: "",
@@ -151,6 +158,8 @@ export default function ClientsPage() {
           first_name: "",
           middle_name: "",
           birth_date: "",
+          country: "",
+          trip_purpose: "",
         }));
       } else {
         setClientFormData(prev => ({
@@ -159,6 +168,11 @@ export default function ClientsPage() {
           bin_iin: "",
           address: "",
           contact_info: "",
+          contact_person_position: "",
+          bank_name: "",
+          iban: "",
+          bik: "",
+          kbe: "",
         }));
       }
     }
@@ -488,6 +502,13 @@ useEffect(() => {
       contact_info: client.contact_info || "",
       client_type: client.client_type || "individual",
 
+      // Legal entity banking fields - read from legal_profile if available
+      contact_person_position: client.legal_profile?.contact_person_position || client.contact_person_position || "",
+      bank_name: client.legal_profile?.bank_name || client.bank_name || "",
+      iban: client.legal_profile?.iban || client.iban || "",
+      bik: client.legal_profile?.bik || client.bik || "",
+      kbe: client.legal_profile?.kbe || client.kbe || "",
+
       // Required fields (RED)
       country: client.country || "",
       trip_purpose: client.trip_purpose || "",
@@ -541,6 +562,11 @@ useEffect(() => {
     try {
       const profile = await ClientAPI.getClientProfile(client.id.toString());
       setClientProfile(profile);
+
+      // Update viewingClient with profile data to include legal_profile with banking fields
+      if (profile?.client) {
+        setViewingClient(profile.client as any);
+      }
       
       // Fetch authenticated photo if it exists
       if (profile?.files?.photo35x45?.exists) {
@@ -573,11 +599,11 @@ useEffect(() => {
   };
 
   const validateRequiredFields = (): boolean => {
-    const requiredFields = ['client_type', 'country', 'trip_purpose'];
+    const requiredFields = ['client_type'];
 
     // Individual-specific required fields
     if (clientFormData.client_type !== "legal") {
-      requiredFields.push('last_name', 'first_name', 'birth_date', 'phone');
+      requiredFields.push('country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'phone');
     }
 
     // Legal-specific required fields
@@ -672,12 +698,19 @@ useEffect(() => {
         legal_address: clientFormData.address || "",
         contact_person_name: clientFormData.contact_info || "",
         contact_person_phone: clientFormData.phone || "",
+        contact_person_position: clientFormData.contact_person_position || "",
+        bank_name: clientFormData.bank_name || "",
+        iban: clientFormData.iban || "",
+        bik: clientFormData.bik || "",
+        kbe: clientFormData.kbe || "",
       };
     }
 
     try {
       if (editingClient) {
         console.log('Updating existing client:', editingClient.id);
+        console.log('Update payload:', payload);
+        console.log('Update legal_profile:', payload.legal_profile);
         await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), payload as any, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно обновлен." });
       } else {
@@ -939,38 +972,42 @@ useEffect(() => {
                       <p className="text-xs text-muted-foreground mt-1">Тип клиента нельзя изменить после создания</p>
                     )}
                   </div>
-                  <div>
-                    <Label htmlFor="country" className="text-red-600">Страна *</Label>
-                    <CustomSelect
-                      value={clientFormData.country || ""}
-                      onChange={(value) => setClientFormData(prev => ({ ...prev, country: value }))}
-                      options={[
-                        { value: "kazakhstan", label: "Казахстан" },
-                        { value: "russia", label: "Россия" },
-                        { value: "usa", label: "США" },
-                        { value: "europe", label: "Европа" },
-                        { value: "other", label: "Другое" }
-                      ]}
-                      placeholder="Выберите страну..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="trip_purpose" className="text-red-600">Цель поездки *</Label>
-                    <CustomSelect
-                      value={clientFormData.trip_purpose || ""}
-                      onChange={(value) => setClientFormData(prev => ({ ...prev, trip_purpose: value }))}
-                      options={[
-                        { value: "tourism", label: "Туризм" },
-                        { value: "business", label: "Бизнес" },
-                        { value: "study", label: "Учеба" },
-                        { value: "work", label: "Работа" },
-                        { value: "medical", label: "Лечение" },
-                        { value: "family", label: "Посещение семьи" },
-                        { value: "other", label: "Другое" }
-                      ]}
-                      placeholder="Выберите цель..."
-                    />
-                  </div>
+                  {clientFormData.client_type !== "legal" && (
+                    <>
+                      <div>
+                        <Label htmlFor="country" className="text-red-600">Страна *</Label>
+                        <CustomSelect
+                          value={clientFormData.country || ""}
+                          onChange={(value) => setClientFormData(prev => ({ ...prev, country: value }))}
+                          options={[
+                            { value: "kazakhstan", label: "Казахстан" },
+                            { value: "russia", label: "Россия" },
+                            { value: "usa", label: "США" },
+                            { value: "europe", label: "Европа" },
+                            { value: "other", label: "Другое" }
+                          ]}
+                          placeholder="Выберите страну..."
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="trip_purpose" className="text-red-600">Цель поездки *</Label>
+                        <CustomSelect
+                          value={clientFormData.trip_purpose || ""}
+                          onChange={(value) => setClientFormData(prev => ({ ...prev, trip_purpose: value }))}
+                          options={[
+                            { value: "tourism", label: "Туризм" },
+                            { value: "business", label: "Бизнес" },
+                            { value: "study", label: "Учеба" },
+                            { value: "work", label: "Работа" },
+                            { value: "medical", label: "Лечение" },
+                            { value: "family", label: "Посещение семьи" },
+                            { value: "other", label: "Другое" }
+                          ]}
+                          placeholder="Выберите цель..."
+                        />
+                      </div>
+                    </>
+                  )}
                   {clientFormData.client_type !== "legal" && (
                     <>
                       <div>
@@ -1022,8 +1059,28 @@ useEffect(() => {
                       <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
                     </div>
                     <div>
+                      <Label htmlFor="contact_person_position">Должность подписанта</Label>
+                      <Input id="contact_person_position" placeholder="Должность..." value={clientFormData.contact_person_position || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
                       <Label htmlFor="phone" className="text-red-600">Телефон контактного лица *</Label>
                       <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bank_name">Название банка</Label>
+                      <Input id="bank_name" placeholder="Название банка..." value={clientFormData.bank_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="iban">IBAN</Label>
+                      <Input id="iban" placeholder="IBAN..." value={clientFormData.iban || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bik">БИК</Label>
+                      <Input id="bik" placeholder="БИК..." value={clientFormData.bik || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="kbe">КБЕ</Label>
+                      <Input id="kbe" placeholder="КБЕ..." value={clientFormData.kbe || ""} onChange={handleFormChange} />
                     </div>
                   </div>
                 </div>
@@ -1354,49 +1411,65 @@ useEffect(() => {
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <DetailItem label="Тип клиента" value={viewingClient.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"} />
-                    <DetailItem label="Страна" value={viewingClient.country} />
-                    <DetailItem label="Цель поездки" value={viewingClient.trip_purpose} />
-                    <DetailItem label="Фамилия" value={viewingClient.last_name} />
-                    <DetailItem label="Имя" value={viewingClient.first_name} />
-                    <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
+                    {viewingClient.client_type !== "legal" && (
+                      <>
+                        <DetailItem label="Страна" value={viewingClient.country} />
+                        <DetailItem label="Цель поездки" value={viewingClient.trip_purpose} />
+                      </>
+                    )}
+                    {viewingClient.client_type !== "legal" && (
+                      <>
+                        <DetailItem label="Фамилия" value={viewingClient.last_name} />
+                        <DetailItem label="Имя" value={viewingClient.first_name} />
+                        <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
+                      </>
+                    )}
                     <DetailItem label="Телефон" value={viewingClient.phone} />
                   </div>
                 </div>
                 <Separator />
-                
-                {/* Personal Information */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <UserIcon className="h-5 w-5" />
-                    Персональная информация
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Отчество" value={viewingClient.middle_name} />
-                    <DetailItem label="Место рождения" value={viewingClient.birth_place} />
-                    <DetailItem label="Гражданство" value={viewingClient.citizenship} />
-                    <DetailItem label="Пол" value={viewingClient.gender} />
-                    <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
-                    <DetailItem label="ИИН" value={viewingClient.iin} />
-                  </div>
-                </div>
-                <Separator />
-                
-                {/* Document Information */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Документы
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
-                    <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
-                    <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
-                    <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
-                    <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expiry_date} />
-                    <DetailItem label="Фото 3,5x4,5" value={viewingClient.photo_35x45} />
-                  </div>
-                </div>
-                <Separator />
+
+                {/* Personal Information - only for individual clients */}
+                {viewingClient.client_type !== "legal" && (
+                  <>
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                        <UserIcon className="h-5 w-5" />
+                        Персональная информация
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailItem label="Отчество" value={viewingClient.middle_name} />
+                        <DetailItem label="Место рождения" value={viewingClient.birth_place} />
+                        <DetailItem label="Гражданство" value={viewingClient.citizenship} />
+                        <DetailItem label="Пол" value={viewingClient.gender} />
+                        <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
+                        <DetailItem label="ИИН" value={viewingClient.iin} />
+                      </div>
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
+                {/* Document Information - only for individual clients */}
+                {viewingClient.client_type !== "legal" && (
+                  <>
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                        <CreditCard className="h-5 w-5" />
+                        Документы
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
+                        <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
+                        <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
+                        <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
+                        <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expiry_date} />
+                        <DetailItem label="Фото 3,5x4,5" value={viewingClient.photo_35x45} />
+                      </div>
+                    </div>
+                    <Separator />
+                  </>
+                )}
                 
                 {/* Contact Information */}
                 <div>
@@ -1411,31 +1484,35 @@ useEffect(() => {
                   </div>
                 </div>
                 <Separator />
-                
-                {/* Optional Fields */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Дополнительная информация
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Прежняя фамилия (девичья)" value={viewingClient.former_maiden_name} />
-                    <DetailItem label="Супруг(а)" value={viewingClient.spouse_info} />
-                    <DetailItem label="Дети" value={viewingClient.children_info} />
-                    <DetailItem label="Образование" value={viewingClient.education} />
-                    <DetailItem label="Место работы и должность" value={viewingClient.work_place_position} />
-                    <DetailItem label="Поездки и визы за 5 лет" value={viewingClient.trips_visas_5years} />
-                    <DetailItem label="Члены семьи за рубежом" value={viewingClient.family_members_abroad} />
-                    <DetailItem label="Доверенное лицо" value={viewingClient.authorized_person} />
-                    <DetailItem label="Рост / Вес" value={viewingClient.height_weight} />
-                    <DetailItem label="Права ВУ (категории)" value={viewingClient.driving_license_categories} />
-                    <DetailItem label="Терапевт / Клиника" value={viewingClient.therapist_clinic} />
-                    <DetailItem label="Болезни и травмы за 3 года" value={viewingClient.illnesses_injuries_3years} />
-                    <DetailItem label="Дополнительная информация" value={viewingClient.additional_info} />
-                  </div>
-                </div>
-                <Separator />
-                
+
+                {/* Additional Information - only for individual clients */}
+                {viewingClient.client_type !== "legal" && (
+                  <>
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Дополнительная информация
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailItem label="Прежняя фамилия (девичья)" value={viewingClient.former_maiden_name} />
+                        <DetailItem label="Супруг(а)" value={viewingClient.spouse_info} />
+                        <DetailItem label="Дети" value={viewingClient.children_info} />
+                        <DetailItem label="Образование" value={viewingClient.education} />
+                        <DetailItem label="Место работы и должность" value={viewingClient.work_place_position} />
+                        <DetailItem label="Поездки и визы за 5 лет" value={viewingClient.trips_visas_5years} />
+                        <DetailItem label="Члены семьи за рубежом" value={viewingClient.family_members_abroad} />
+                        <DetailItem label="Доверенное лицо" value={viewingClient.authorized_person} />
+                        <DetailItem label="Рост / Вес" value={viewingClient.height_weight} />
+                        <DetailItem label="Права ВУ (категории)" value={viewingClient.driving_license_categories} />
+                        <DetailItem label="Терапевт / Клиника" value={viewingClient.therapist_clinic} />
+                        <DetailItem label="Болезни и травмы за 3 года" value={viewingClient.illnesses_injuries_3years} />
+                        <DetailItem label="Дополнительная информация" value={viewingClient.additional_info} />
+                      </div>
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
                 {/* Organization Information */}
                 <div>
                   <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
@@ -1447,6 +1524,11 @@ useEffect(() => {
                     <DetailItem label="БИН/ИИН" value={viewingClient.bin_iin} />
                     <DetailItem label="Адрес" value={viewingClient.address} />
                     <DetailItem label="Контактная информация" value={viewingClient.contact_info} />
+                    <DetailItem label="Должность подписанта" value={viewingClient.legal_profile?.contact_person_position || viewingClient.contact_person_position} />
+                    <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name || viewingClient.bank_name} />
+                    <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban || viewingClient.iban} />
+                    <DetailItem label="БИК" value={viewingClient.legal_profile?.bik || viewingClient.bik} />
+                    <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe || viewingClient.kbe} />
                   </div>
                 </div>
               </div>

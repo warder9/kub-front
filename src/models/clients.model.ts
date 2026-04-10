@@ -6,6 +6,26 @@ export interface Client {
   bin_iin?: string | null;
   address?: string | null;
   contact_info?: string | null;
+  // Legal entity banking fields
+  contact_person_position?: string | null;
+  bank_name?: string | null;
+  iban?: string | null;
+  bik?: string | null;
+  kbe?: string | null;
+  legal_profile?: {
+    company_name?: string;
+    bin?: string;
+    legal_address?: string;
+    contact_person_name?: string;
+    contact_person_position?: string;
+    contact_person_phone?: string;
+    contact_person_email?: string;
+    actual_address?: string;
+    bank_name?: string;
+    iban?: string;
+    bik?: string;
+    kbe?: string;
+    };
   
   // Required fields (RED)
   country: string;
@@ -59,6 +79,11 @@ export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at
     legal_address?: string;
     contact_person_name?: string;
     contact_person_phone?: string;
+    contact_person_position?: string;
+    bank_name?: string;
+    iban?: string;
+    bik?: string;
+    kbe?: string;
   };
 };
 
