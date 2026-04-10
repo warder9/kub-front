@@ -217,9 +217,18 @@ export default function DealsPage() {
       // Get current user data directly to ensure we have the latest role
       const currentUser = getCurrentUser();
       const userRole = currentUser?.role || user?.role;
-      
-      // Only allow 'all' view for system_admin and leadership roles explicitly
-      const effectiveView = (userRole === 'system_admin' || userRole === 'leadership') ? 'all' : 'my';
+
+      console.log('User role check:', {
+        currentUser,
+        currentUserRole: currentUser?.role,
+        currentUserRoleId: currentUser?.role_id,
+        stateUserRole: user?.role,
+        stateUserId: user?.role_id,
+        userRole
+      });
+
+      // Only allow 'all' view for system_admin, leadership, and management roles explicitly
+      const effectiveView = (userRole === 'system_admin' || userRole === 'leadership' || userRole === 'management') ? 'all' : 'my';
       
       console.log('fetchDeals called:', { 
         userRole,

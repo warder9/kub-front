@@ -141,6 +141,7 @@ const DetailItem = ({ label, value }: { label: string; value?: string | null }) 
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [clientTypeFilter, setClientTypeFilter] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [clientFormData, setClientFormData] =
     useState<Models.CreateClientRequest>(EMPTY_CLIENT);
@@ -282,6 +283,7 @@ export default function ClientsPage() {
     try {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
+      if (clientTypeFilter) params.client_type = clientTypeFilter;
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
@@ -467,7 +469,7 @@ useEffect(() => {
     } else {
       console.log('No user - skipping fetchClients');
     }
-  }, [clientView, currentPage]); // Remove user from deps - we get fresh data in fetchClients
+  }, [clientView, currentPage, clientTypeFilter]); // Remove user from deps - we get fresh data in fetchClients
 
   useEffect(() => {
     console.log('=== USEEFFECT 3: Search Debounce ===');
@@ -799,6 +801,16 @@ useEffect(() => {
             />
           </div>
           <div className="flex items-center gap-2">
+            <CustomSelect
+              value={clientTypeFilter}
+              onChange={(value) => setClientTypeFilter(value)}
+              placeholder="Тип клиента"
+              options={[
+                { value: "", label: "Все типы" },
+                { value: "individual", label: "Физическое лицо" },
+                { value: "legal", label: "Юридическое лицо" },
+              ]}
+            />
             {user?.role !== 'sales' && (
               <Button
                 variant={clientView === "all" ? "secondary" : "outline"}

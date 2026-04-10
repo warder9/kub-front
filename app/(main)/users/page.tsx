@@ -168,23 +168,23 @@ export default function UsersPage() {
 
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
-    
-    // Use frontend role mapping for consistency
+
+    // Use backend role codes
     switch (id) {
       case 10:
-        return "Отдел продаж";
+        return "RoleSales";
       case 15:
-        return "Административный персонал";
+        return "RoleBackofficeStaff";
       case 20:
-        return "Операционный отдел";
+        return "RoleOperations";
       case 30:
-        return "Отдел контроля";
+        return "RoleControl";
       case 40:
-        return "Руководство";
+        return "RoleManagement";
       case 50:
-        return "Системный администратор";
+        return "RoleSystemAdmin";
       default:
-        return "Неизвестная роль";
+        return "Unknown Role";
     }
   };
 
@@ -506,7 +506,7 @@ export default function UsersPage() {
                   disabled={rolesLoading}
                   options={availableRoles.map(role => ({
                     value: String(role.id),
-                    label: role.name
+                    label: getRoleLabel(Number(role.id))
                   }))}
                 />
               </div>
