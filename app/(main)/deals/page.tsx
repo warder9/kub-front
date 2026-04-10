@@ -117,8 +117,9 @@ export default function DealsPage() {
   const [newDeal, setNewDeal] = useState({
     lead_id: 0,
     client_id: 0,
+    client_type: "individual",
     owner_id: 0,
-    amount: "",
+    amount: 0,
     currency: "KZT",
     status: "new",
   });
@@ -126,8 +127,9 @@ export default function DealsPage() {
   const [editDeal, setEditDeal] = useState({
     lead_id: 0,
     client_id: 0,
+    client_type: "individual",
     owner_id: 0,
-    amount: "",
+    amount: 0,
     currency: "KZT",
     status: "new",
   });
@@ -544,8 +546,9 @@ export default function DealsPage() {
     setNewDeal({
       lead_id: 0,
       client_id: 0,
+      client_type: "individual",
       owner_id: user?.id ? parseInt(user.id) : 0,
-      amount: "",
+      amount: 0,
       currency: "KZT",
       status: "new",
     });
@@ -603,8 +606,9 @@ export default function DealsPage() {
     setEditDeal({
       lead_id: deal.lead_id || 0,
       client_id: deal.client_id || 0,
+      client_type: deal.client_type || "individual",
       owner_id: deal.owner_id || (user?.id ? parseInt(user.id) : 0),
-      amount: deal.amount?.toString() || "",
+      amount: Number(deal.amount) || 0,
       currency: deal.currency || "KZT",
       status: deal.status || "new",
     });
@@ -666,13 +670,15 @@ export default function DealsPage() {
 
       const payload = {
         lead_id: newDeal.lead_id ? Number(newDeal.lead_id) : undefined,
-        client_id: Number(newDeal.client_id),
-        owner_id: Number(newDeal.owner_id),
+        client_id: newDeal.client_id ? Number(newDeal.client_id) : undefined,
+        client_type: newDeal.client_type || "individual",
+        owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
         amount: Number(newDeal.amount),
         currency: newDeal.currency || "KZT",
         status: newDeal.status || "new",
       };
 
+      console.log("Creating deal with payload:", payload);
       const res = await create_deal(payload as any);
       const createdDeal = res?.data || res;
 
@@ -681,7 +687,8 @@ export default function DealsPage() {
       toast.success("Сделка успешно создана");
     } catch (err: any) {
       console.error("Error creating deal:", err);
-      toast.error(err?.message || "Ошибка при создании сделки");
+      console.error("Error response data:", err?.response?.data);
+      toast.error(err?.response?.data?.message || err?.message || "Ошибка при создании сделки");
     } finally {
       setIsCreateDialogOpen(false);
       setIsLoading(false);
@@ -698,8 +705,9 @@ export default function DealsPage() {
 
       const payload = {
         lead_id: editDeal.lead_id ? Number(editDeal.lead_id) : undefined,
-        client_id: Number(editDeal.client_id),
-        owner_id: Number(editDeal.owner_id),
+        client_id: editDeal.client_id ? Number(editDeal.client_id) : undefined,
+        client_type: editDeal.client_type || "individual",
+        owner_id: editDeal.owner_id ? Number(editDeal.owner_id) : undefined,
         amount: Number(editDeal.amount),
         currency: editDeal.currency || "KZT",
         status: editDeal.status || "new",
@@ -1180,9 +1188,15 @@ export default function DealsPage() {
               <Label htmlFor="client_id">Клиент <span className="text-red-500">*</span></Label>
               <ComboboxSelect
                 value={newDeal.client_id?.toString() || ""}
-                onChange={(value) =>
-                  setNewDeal({ ...newDeal, client_id: parseInt(value) || 0 })
-                }
+                onChange={(value) => {
+                  const clientId = parseInt(value) || 0;
+                  const selectedClient = clients.find(c => c.id === clientId);
+                  setNewDeal({
+                    ...newDeal,
+                    client_id: clientId,
+                    client_type: selectedClient?.client_type || "individual"
+                  });
+                }}
                 placeholder="Выберите клиента"
                 searchPlaceholder="Поиск клиента..."
                 emptyText="Клиент не найден"
@@ -1197,6 +1211,17 @@ export default function DealsPage() {
               {clients.length === 0 && (
                 <p className="text-xs text-amber-600">Сначала создайте клиента в разделе Клиенты</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="client_type">Тип клиента</Label>
+              <Input
+                id="client_type"
+                value={newDeal.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически</p>
             </div>
 
             <div className="space-y-2">
@@ -1223,7 +1248,7 @@ export default function DealsPage() {
                 placeholder="Введите сумму..."
                 value={newDeal.amount}
                 onChange={(e) =>
-                  setNewDeal({ ...newDeal, amount: e.target.value })
+                  setNewDeal({ ...newDeal, amount: Number(e.target.value) })
                 }
               />
             </div>
@@ -1310,9 +1335,15 @@ export default function DealsPage() {
               <Label htmlFor="edit_client_id">Клиент</Label>
               <ComboboxSelect
                 value={editDeal.client_id?.toString() || ""}
-                onChange={(value) =>
-                  setEditDeal({ ...editDeal, client_id: parseInt(value) || 0 })
-                }
+                onChange={(value) => {
+                  const clientId = parseInt(value) || 0;
+                  const selectedClient = clients.find(c => c.id === clientId);
+                  setEditDeal({
+                    ...editDeal,
+                    client_id: clientId,
+                    client_type: selectedClient?.client_type || "individual"
+                  });
+                }}
                 placeholder="Выберите клиента"
                 searchPlaceholder="Поиск клиента..."
                 options={clients.map((client) => ({
@@ -1320,6 +1351,17 @@ export default function DealsPage() {
                   label: client.name || `Клиент #${client.id}`
                 }))}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_client_type">Тип клиента</Label>
+              <Input
+                id="edit_client_type"
+                value={editDeal.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически</p>
             </div>
 
             <div className="space-y-2">
@@ -1346,7 +1388,7 @@ export default function DealsPage() {
                 placeholder="Введите сумму..."
                 value={editDeal.amount}
                 onChange={(e) =>
-                  setEditDeal({ ...editDeal, amount: e.target.value })
+                  setEditDeal({ ...editDeal, amount: Number(e.target.value) })
                 }
               />
             </div>

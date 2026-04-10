@@ -1,5 +1,6 @@
 export interface Client {
   id: string;
+  client_type?: string | null;
   // Organization info
   name?: string | null;
   bin_iin?: string | null;
@@ -50,6 +51,15 @@ export interface Client {
   updated_at: string;
 }
 
-export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at">;
+export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at"> & {
+  client_type?: string;
+  legal_profile?: {
+    company_name?: string;
+    bin?: string;
+    legal_address?: string;
+    contact_person_name?: string;
+    contact_person_phone?: string;
+  };
+};
 
 export type UpdateClientRequest = Partial<CreateClientRequest>;

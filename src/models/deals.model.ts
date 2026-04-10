@@ -1,8 +1,9 @@
 export type Deals_Create_deal_Request = {
   lead_id?: number
   client_id?: number
+  client_type?: string
   owner_id?: number
-  amount: string
+  amount: number
   currency: string
   status: string
 }
@@ -10,8 +11,9 @@ export type Deals_Create_deal_Request = {
 export type Deals_Update_deal_Request = {
   lead_id?: number
   client_id?: number
+  client_type?: string
   owner_id?: number
-  amount?: string
+  amount?: number
   currency?: string
   status?: string
 }
@@ -26,8 +28,9 @@ export interface Deal {
   id: number
   lead_id?: number
   client_id?: number
+  client_type?: string
   owner_id?: number
-  amount: string
+  amount: number
   currency: string
   status: string
   created_at?: string

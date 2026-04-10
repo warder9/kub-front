@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { CustomSelect } from "@/components/ui/custom-select";
 import {
   Table,
@@ -62,6 +63,7 @@ import {
   Users,
   CreditCard,
   Download,
+  Building,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
 import * as ClientAPI from "@/src/api/clients.api";
@@ -80,7 +82,8 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   bin_iin: "",
   address: "",
   contact_info: "",
-  
+  client_type: "individual",
+
   // Required fields (RED)
   country: "",
   trip_purpose: "",
@@ -137,6 +140,29 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Models.Client | null>(
     null
   );
+
+  // Reset individual/legal specific fields when client_type changes (only when creating, not editing)
+  useEffect(() => {
+    if (!editingClient) {
+      if (clientFormData.client_type === "legal") {
+        setClientFormData(prev => ({
+          ...prev,
+          last_name: "",
+          first_name: "",
+          middle_name: "",
+          birth_date: "",
+        }));
+      } else {
+        setClientFormData(prev => ({
+          ...prev,
+          name: "",
+          bin_iin: "",
+          address: "",
+          contact_info: "",
+        }));
+      }
+    }
+  }, [clientFormData.client_type, editingClient]);
   const [clientToDelete, setClientToDelete] = useState<Models.Client | null>(null);
   const [viewingClient, setViewingClient] = useState<Models.Client | null>(null);
   const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
@@ -229,34 +255,34 @@ export default function ClientsPage() {
 
   const fetchClients = async () => {
     console.log('=== FETCH CLIENTS DEBUG ===');
-    console.log('fetchClients called with:', { 
-      userRole: user?.role, 
+    console.log('fetchClients called with:', {
+      userRole: user?.role,
       clientView,
       currentPage,
       searchTerm,
-      isLoading 
+      isLoading
     });
-    
+
     setIsLoading(true);
     setError("");
     try {
-      const params: any = { page: currentPage, limit };
+      const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
       let effectiveView = (currentUser?.role === 'sales' || currentUser?.role_id === 10) ? 'my' : clientView;
-      
+
       // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
       if (currentUser?.role === 'sales' || currentUser?.role_id === 10) {
         effectiveView = 'my';
         console.log('SAFEGUARD: Forced to my view for sales user');
       }
-      
-      console.log('fetchClients API call:', { 
-        userRole: currentUser?.role, 
+
+      console.log('fetchClients API call:', {
+        userRole: currentUser?.role,
         userId: currentUser?.role_id,
-        clientView, 
+        clientView,
         effectiveView,
         endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
         params,
@@ -265,21 +291,46 @@ export default function ClientsPage() {
         'effectiveView === "all"': effectiveView === "all",
         'calling listClients?': effectiveView === "all"
       });
-      
+
+      // Check auth token
+      const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      console.log('Auth token present:', !!authToken);
+      console.log('Auth token (first 20 chars):', authToken?.substring(0, 20) + '...');
+
+      // Try to decode JWT to check user_id
+      if (authToken) {
+        try {
+          const base64Url = authToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          const decoded = JSON.parse(jsonPayload);
+          console.log('Decoded JWT payload:', {
+            user_id: decoded.user_id,
+            role_id: decoded.role_id,
+            exp: decoded.exp,
+            iat: decoded.iat
+          });
+        } catch (e) {
+          console.log('Failed to decode JWT:', e);
+        }
+      }
+
       // Use proper API based on user role
       console.log('Choosing API endpoint based on role:', {
         currentUserRole: currentUser?.role,
         isSales: currentUser?.role === 'sales',
         willCall: currentUser?.role === 'sales' ? 'listMyClients' : 'listClients'
       });
-      
+
       // More robust role check - handle different formats and undefined roles
       const userRole = currentUser?.role;
       const userId = currentUser?.role_id;
       const isSalesRole = (!userRole && !userId) || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales' || userId === 10;
-      
+
       console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
-      
+
       // AGGRESSIVE SAFEGUARD: If we get 403 on listClients, fallback to listMyClients
       let res;
       try {
@@ -292,9 +343,15 @@ export default function ClientsPage() {
         }
       } catch (error: any) {
         console.log('listClients failed, falling back to listMyClients:', error?.message);
+        console.log('Error details:', {
+          status: error?.response?.status,
+          statusText: error?.response?.statusText,
+          data: error?.response?.data,
+          code: error?.code
+        });
         res = await ClientAPI.listMyClients(params);
       }
-          
+
       console.log('API call completed - used fallback endpoint');
 
       console.log('API response:', res);
@@ -303,19 +360,26 @@ export default function ClientsPage() {
       const data = Array.isArray(res) ? res : (res as any)?.data || [];
       const total = (res as any)?.total || data.length;
 
-      console.log('Processed data:', { 
-        dataLength: data.length, 
+      console.log('Processed data:', {
+        dataLength: data.length,
         total,
         isArray: Array.isArray(data),
-        firstItem: data[0] 
+        firstItem: data[0]
       });
 
       setClients(Array.isArray(data) ? data : []);
       setTotalClients(total);
-      
+
       console.log('State updated - clients count:', data.length);
     } catch (err: any) {
       console.error('fetchClients error:', err);
+      console.error('Error details:', {
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        data: err?.response?.data,
+        code: err?.code,
+        message: err?.message
+      });
       setError(err?.message || "Ошибка при загрузке клиентов");
       toast({
         variant: "destructive",
@@ -422,7 +486,8 @@ useEffect(() => {
       bin_iin: client.bin_iin || "",
       address: client.address || "",
       contact_info: client.contact_info || "",
-      
+      client_type: client.client_type || "individual",
+
       // Required fields (RED)
       country: client.country || "",
       trip_purpose: client.trip_purpose || "",
@@ -508,7 +573,18 @@ useEffect(() => {
   };
 
   const validateRequiredFields = (): boolean => {
-    const requiredFields = ['country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'phone'];
+    const requiredFields = ['client_type', 'country', 'trip_purpose'];
+
+    // Individual-specific required fields
+    if (clientFormData.client_type !== "legal") {
+      requiredFields.push('last_name', 'first_name', 'birth_date', 'phone');
+    }
+
+    // Legal-specific required fields
+    if (clientFormData.client_type === "legal") {
+      requiredFields.push('name', 'bin_iin', 'address', 'contact_info', 'phone');
+    }
+
     const missingFields = requiredFields.filter(field => !clientFormData[field as keyof Models.CreateClientRequest]);
     
     if (missingFields.length > 0) {
@@ -576,6 +652,7 @@ useEffect(() => {
     console.log('=== CLIENT SUBMISSION DEBUG ===');
     console.log('Editing client:', editingClient);
     console.log('Current form data:', clientFormData);
+    console.log('Client type:', clientFormData.client_type);
     console.log('Selected photo file:', selectedPhotoFile);
     console.log('Required fields validation:');
     
@@ -585,15 +662,27 @@ useEffect(() => {
     }
     
     console.log('Validation passed - proceeding with API call');
-    
+
+    // Prepare payload with legal_profile for legal clients
+    const payload = { ...clientFormData };
+    if (clientFormData.client_type === "legal") {
+      payload.legal_profile = {
+        company_name: clientFormData.name || "",
+        bin: clientFormData.bin_iin || "",
+        legal_address: clientFormData.address || "",
+        contact_person_name: clientFormData.contact_info || "",
+        contact_person_phone: clientFormData.phone || "",
+      };
+    }
+
     try {
       if (editingClient) {
         console.log('Updating existing client:', editingClient.id);
-        await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), clientFormData, selectedPhotoFile || undefined);
+        await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), payload as any, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно обновлен." });
       } else {
-        console.log('Creating new client with payload:', clientFormData);
-        await ClientAPI.createClientWithPhoto(clientFormData, selectedPhotoFile || undefined);
+        console.log('Creating new client with payload:', payload);
+        await ClientAPI.createClientWithPhoto(payload as any, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно создан." });
       }
       void fetchClients(); // Refresh list
@@ -708,6 +797,7 @@ useEffect(() => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Название/Имя</TableHead>
+                  <TableHead>Тип клиента</TableHead>
                   <TableHead>БИН/ИИН</TableHead>
                   <TableHead>Контакт</TableHead>
                   <TableHead>Телефон</TableHead>
@@ -717,13 +807,13 @@ useEffect(() => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       <Spinner />
                     </TableCell>
                   </TableRow>
                 ) : (!clients || clients.length === 0) ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Клиенты не найдены.
                     </TableCell>
                   </TableRow>
@@ -734,9 +824,14 @@ useEffect(() => {
                         {client.name ||
                           `${client.last_name} ${client.first_name}`}
                       </TableCell>
+                      <TableCell>
+                        <Badge variant={client.client_type === "legal" ? "default" : "secondary"}>
+                          {client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{client.bin_iin || client.iin || '-'}</TableCell>
                       <TableCell>
-                        {`${client.last_name} ${client.first_name}`}
+                        {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
                       </TableCell>
                       <TableCell>{client.phone}</TableCell>
                       <TableCell className="text-right">
@@ -829,6 +924,22 @@ useEffect(() => {
                 <Separator />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
+                    <Label htmlFor="client_type" className="text-red-600">Тип клиента *</Label>
+                    <CustomSelect
+                      value={clientFormData.client_type || "individual"}
+                      onChange={(value) => setClientFormData(prev => ({ ...prev, client_type: value }))}
+                      options={[
+                        { value: "individual", label: "Физическое лицо" },
+                        { value: "legal", label: "Юридическое лицо" }
+                      ]}
+                      placeholder="Выберите тип клиента..."
+                      disabled={!!editingClient}
+                    />
+                    {editingClient && (
+                      <p className="text-xs text-muted-foreground mt-1">Тип клиента нельзя изменить после создания</p>
+                    )}
+                  </div>
+                  <div>
                     <Label htmlFor="country" className="text-red-600">Страна *</Label>
                     <CustomSelect
                       value={clientFormData.country || ""}
@@ -860,24 +971,63 @@ useEffect(() => {
                       placeholder="Выберите цель..."
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="last_name" className="text-red-600">Фамилия *</Label>
-                    <Input id="last_name" placeholder="Введите фамилию..." value={clientFormData.last_name || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="first_name" className="text-red-600">Имя *</Label>
-                    <Input id="first_name" placeholder="Введите имя..." value={clientFormData.first_name || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="birth_date" className="text-red-600">Дата рождения *</Label>
-                    <Input id="birth_date" type="date" value={clientFormData.birth_date || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone" className="text-red-600">Номер телефона *</Label>
-                    <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
-                  </div>
+                  {clientFormData.client_type !== "legal" && (
+                    <>
+                      <div>
+                        <Label htmlFor="last_name" className="text-red-600">Фамилия *</Label>
+                        <Input id="last_name" placeholder="Введите фамилию..." value={clientFormData.last_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div>
+                        <Label htmlFor="first_name" className="text-red-600">Имя *</Label>
+                        <Input id="first_name" placeholder="Введите имя..." value={clientFormData.first_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div>
+                        <Label htmlFor="birth_date" className="text-red-600">Дата рождения *</Label>
+                        <Input id="birth_date" type="date" value={clientFormData.birth_date || ""} onChange={handleFormChange} />
+                      </div>
+                    </>
+                  )}
+                  {clientFormData.client_type !== "legal" && (
+                    <div>
+                      <Label htmlFor="phone" className="text-red-600">Номер телефона *</Label>
+                      <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Legal Entity Information - shown only for legal clients */}
+              {clientFormData.client_type === "legal" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Building className="h-5 w-5" />
+                    Информация о юридическом лице
+                  </h3>
+                  <Separator />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="name" className="text-red-600">Название компании *</Label>
+                      <Input id="name" placeholder="Введите название компании..." value={clientFormData.name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bin_iin" className="text-red-600">БИН *</Label>
+                      <Input id="bin_iin" placeholder="Введите БИН..." value={clientFormData.bin_iin || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="address" className="text-red-600">Юридический адрес *</Label>
+                      <Input id="address" placeholder="Введите юридический адрес..." value={clientFormData.address || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="contact_info" className="text-red-600">Контактное лицо (ФИО) *</Label>
+                      <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone" className="text-red-600">Телефон контактного лица *</Label>
+                      <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Personal Information */}
               <div className="space-y-4">
@@ -1203,6 +1353,7 @@ useEffect(() => {
                     Обязательные поля
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
+                    <DetailItem label="Тип клиента" value={viewingClient.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"} />
                     <DetailItem label="Страна" value={viewingClient.country} />
                     <DetailItem label="Цель поездки" value={viewingClient.trip_purpose} />
                     <DetailItem label="Фамилия" value={viewingClient.last_name} />
