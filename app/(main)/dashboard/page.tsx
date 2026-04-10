@@ -39,8 +39,8 @@ export default function DashboardPage() {
       }
 
       // Redirect based on role
-      const adminRoles = ['system_admin', 'leadership'];
-      const adminRoleIds = [50, 40];
+      const adminRoles = ['system_admin'];
+      const adminRoleIds = [50];
       if (user?.role && adminRoles.includes(user.role)) {
         console.log('Redirecting to /users based on role');
         router.push("/users");
@@ -61,10 +61,13 @@ export default function DashboardPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p>Перенаправление...</p>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center animate-fade-in">
+        <div className="relative mb-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
+          <div className="absolute inset-0 animate-pulse rounded-full h-16 w-16 bg-blue-400/20 blur-xl"></div>
+        </div>
+        <p className="text-lg font-medium text-slate-700">Перенаправление...</p>
       </div>
     </div>
   );

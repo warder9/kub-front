@@ -20,10 +20,13 @@ export default function HomePage() {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-      <div className="text-white text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p>Загрузка...</p>
+    <div className="min-h-screen gradient-hero flex items-center justify-center">
+      <div className="text-white text-center animate-fade-in">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-white/30 border-t-white mx-auto mb-6"></div>
+          <div className="absolute inset-0 animate-pulse rounded-full h-16 w-16 bg-white/10 blur-xl"></div>
+        </div>
+        <p className="text-lg font-medium">Загрузка...</p>
       </div>
     </div>
   )

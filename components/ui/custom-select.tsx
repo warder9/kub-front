@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,18 +29,35 @@ export function CustomSelect({
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
+  const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
 
+  // Calculate dropdown position when opening
+  React.useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [isOpen]);
+
   // Close dropdown when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      const isOutsideContainer = containerRef.current && !containerRef.current.contains(target);
+      const isOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(target);
+      
+      if (isOutsideContainer && isOutsideDropdown) {
         setIsOpen(false);
       }
     };
@@ -134,6 +152,7 @@ export function CustomSelect({
     <div ref={containerRef} className={cn("relative", className)}>
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={handleToggle}
         disabled={disabled}
@@ -162,14 +181,20 @@ export function CustomSelect({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Dropdown Menu - rendered via portal */}
+      {isOpen && dropdownPosition && typeof window !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
           className={cn(
-            "absolute z-[1000] mt-1 w-full overflow-hidden rounded-xl border bg-[#F1F5F9] shadow-md",
+            "fixed overflow-hidden rounded-xl border bg-white shadow-lg",
             "animate-in fade-in-0 zoom-in-95",
           )}
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            zIndex: 9999,
+          }}
           role="listbox"
         >
           <div className="max-h-96 overflow-y-auto p-1">
@@ -204,7 +229,8 @@ export function CustomSelect({
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

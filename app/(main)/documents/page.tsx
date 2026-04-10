@@ -112,6 +112,7 @@ import {
     submitDocument,
     reviewDocument,
     generateSignLink,
+    startSign,
 } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
@@ -408,6 +409,7 @@ export default function DocumentsPage() {
     const [signLinkDoc, setSignLinkDoc] = useState<Document | null>(null)
     const [signLinkUrl, setSignLinkUrl] = useState("")
     const [signLinkLoading, setSignLinkLoading] = useState(false)
+    const [signEmail, setSignEmail] = useState("")
 
     // ─── PDF Viewer ─────────────────────────────────────────────
 
@@ -733,6 +735,19 @@ export default function DocumentsPage() {
     const handleSendForSign = async (doc: Document) => {
         setSignLinkDoc(doc)
         setSignLinkUrl("")
+        
+        // Try to get client email for pre-filling
+        let clientEmail = ""
+        if (doc.client_id) {
+            const client = clients.find(c => c.id?.toString() === doc.client_id?.toString())
+            if (client?.email) {
+                clientEmail = client.email
+            } else if (client?.legal_profile?.contact_person_email) {
+                clientEmail = client.legal_profile.contact_person_email
+            }
+        }
+        setSignEmail(clientEmail)
+        
         setIsSignLinkOpen(true)
         setSignLinkLoading(true)
         try {
@@ -766,6 +781,27 @@ export default function DocumentsPage() {
         if (!signLinkUrl) return
         const text = encodeURIComponent(`Пожалуйста, подпишите документ по ссылке: ${signLinkUrl}`)
         window.open(`https://t.me/share/url?url=${encodeURIComponent(signLinkUrl)}&text=${text}`, "_blank")
+    }
+
+    const handleSendEmailSign = async () => {
+        if (!signLinkDoc || !signEmail) {
+            toast.error("Введите email адрес")
+            return
+        }
+        
+        setSignLinkLoading(true)
+        try {
+            await startSign(signLinkDoc.id, signEmail)
+            toast.success("Письмо с ссылкой для подписи отправлено на " + signEmail)
+            setIsSignLinkOpen(false)
+            setSignEmail("")
+            await fetchDocuments()
+        } catch (err: any) {
+            console.error("Error sending email for signing:", err)
+            toast.error(err?.message || "Ошибка отправки письма")
+        } finally {
+            setSignLinkLoading(false)
+        }
     }
 
     // ─── Details ────────────────────────────────────────────────
@@ -1403,7 +1439,7 @@ export default function DocumentsPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Send for Signing Dialog (Link-based) ────────────────── */}
+            {/* ── Send for Signing Dialog (Link-based & Email) ────────────────── */}
             <Dialog open={isSignLinkOpen} onOpenChange={setIsSignLinkOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
@@ -1423,75 +1459,126 @@ export default function DocumentsPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                             <p className="text-sm text-gray-500">Генерация ссылки для подписи...</p>
                         </div>
-                    ) : signLinkUrl ? (
-                        <div className="space-y-5">
-                            {/* Link display */}
-                            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                                <p className="text-xs text-blue-700 font-medium mb-2">Ссылка для клиента:</p>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        readOnly
-                                        value={signLinkUrl}
-                                        className="bg-white text-sm font-mono"
-                                    />
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={handleCopySignLink}
-                                        title="Копировать"
-                                    >
-                                        <Copy className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Quick share buttons */}
-                            <div className="space-y-2">
-                                <p className="text-xs text-gray-500 font-medium">Быстрая отправка:</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleShareWhatsApp}
-                                        className="border-green-200 text-green-700 hover:bg-green-50 h-11"
-                                    >
-                                        <MessageCircle className="h-4 w-4 mr-2" />
-                                        WhatsApp
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleShareTelegram}
-                                        className="border-blue-200 text-blue-700 hover:bg-blue-50 h-11"
-                                    >
-                                        <Send className="h-4 w-4 mr-2" />
-                                        Telegram
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Info */}
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                <div className="flex items-start gap-2">
-                                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                                    <div className="text-xs text-gray-600">
-                                        <p>Клиент откроет ссылку, просмотрит документ и поставит графическую подпись.</p>
-                                        <p className="mt-1">После подписания вы получите <strong>уведомление в Telegram</strong>, а статус документа изменится автоматически.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     ) : (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
-                            <XCircle className="h-8 w-8 text-red-400 mx-auto mb-2" />
-                            <p className="text-sm text-red-700">Не удалось сгенерировать ссылку</p>
+                        <div className="space-y-5">
+                            {/* Email input */}
+                            <div className="space-y-2">
+                                <Label htmlFor="sign-email">Email клиента</Label>
+                                <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-gray-400" />
+                                    <Input
+                                        id="sign-email"
+                                        type="email"
+                                        placeholder="client@example.com"
+                                        value={signEmail}
+                                        onChange={(e) => setSignEmail(e.target.value)}
+                                        className="flex-1"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    Отправить письмо со ссылкой для подписи на указанный email
+                                </p>
+                            </div>
+
+                            {/* Send email button */}
                             <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => signLinkDoc && handleSendForSign(signLinkDoc)}
-                                className="mt-3"
+                                onClick={handleSendEmailSign}
+                                disabled={!signEmail || signLinkLoading}
+                                className="w-full"
                             >
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Повторить
+                                {signLinkLoading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Отправка...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send className="h-4 w-4 mr-2" />
+                                        Отправить на email
+                                    </>
+                                )}
                             </Button>
+
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-background px-2 text-muted-foreground">Или поделиться ссылкой</span>
+                                </div>
+                            </div>
+
+                            {signLinkUrl ? (
+                                <>
+                                    {/* Link display */}
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                                        <p className="text-xs text-blue-700 font-medium mb-2">Ссылка для клиента:</p>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                readOnly
+                                                value={signLinkUrl}
+                                                className="bg-white text-sm font-mono"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={handleCopySignLink}
+                                                title="Копировать"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick share buttons */}
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-gray-500 font-medium">Быстрая отправка:</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleShareWhatsApp}
+                                                className="border-green-200 text-green-700 hover:bg-green-50 h-11"
+                                            >
+                                                <MessageCircle className="h-4 w-4 mr-2" />
+                                                WhatsApp
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleShareTelegram}
+                                                className="border-blue-200 text-blue-700 hover:bg-blue-50 h-11"
+                                            >
+                                                <Send className="h-4 w-4 mr-2" />
+                                                Telegram
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Info */}
+                                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                                            <div className="text-xs text-gray-600">
+                                                <p>Клиент откроет ссылку, просмотрит документ и поставит графическую подпись.</p>
+                                                <p className="mt-1">После подписания вы получите <strong>уведомление в Telegram</strong>, а статус документа изменится автоматически.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
+                                    <XCircle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+                                    <p className="text-sm text-red-700">Не удалось сгенерировать ссылку</p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => signLinkDoc && handleSendForSign(signLinkDoc)}
+                                        className="mt-3"
+                                    >
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Повторить
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
 

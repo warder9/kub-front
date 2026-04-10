@@ -239,6 +239,7 @@ export default function TasksPage() {
   const [totalTasks, setTotalTasks] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
 
   const [users, setUsers] = useState<any[]>([])
   const [deals, setDeals] = useState<any[]>([])
@@ -308,31 +309,44 @@ export default function TasksPage() {
   const fetchTasks = async () => {
     setIsLoading(true)
     try {
-      const params: any = { page: currentPage, limit }
+      const params: any = { page: currentPage, size: limit }
       if (searchTerm) params.search = searchTerm
+      if (statusFilter !== "all") params.status = statusFilter
 
       // Prevent sales users from accessing full tasks list
       // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
       const effectiveView = currentUser?.role === 'sales' ? 'all' : 'all';
-      
-      console.log('fetchTasks called:', { 
-        userRole: currentUser?.role, 
+
+      console.log('fetchTasks called:', {
+        userRole: currentUser?.role,
         effectiveView,
-        endpoint: '/tasks' // Always use /tasks for now since /tasks/my returns 400
+        endpoint: '/tasks', // Always use /tasks for now since /tasks/my returns 400
+        params
       });
-      
+
       const res = await list_tasks(undefined, params);
-      
-      const data = res?.data || (Array.isArray(res) ? res : [])
-      const total = res?.total || data.length
-      
+
+      let data = res?.data || (Array.isArray(res) ? res : [])
+      let total = res?.total || data.length
+
+      // Client-side filtering as fallback if backend doesn't support status filter
+      if (statusFilter !== "all") {
+        const filteredData = data.filter((task: any) => task.status === statusFilter);
+        // Only use filtered count if backend didn't filter
+        if (filteredData.length !== data.length) {
+          console.log('Backend did not filter by status, applying client-side filter');
+          data = filteredData;
+          total = filteredData.length;
+        }
+      }
+
       console.log('Tasks response:', {
         userRole: currentUser?.role,
         totalTasks: data.length,
         tasks: data.slice(0, 3), // Show first 3 tasks for debugging
         responseTotal: total
       });
-      
+
       setTasks(data)
       setTotalTasks(total)
     } catch (err: any) {
@@ -484,7 +498,7 @@ export default function TasksPage() {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [searchTerm, currentPage, currentUser])
+  }, [searchTerm, currentPage, currentUser, statusFilter])
 
   const handleRefresh = () => {
     console.log('handleRefresh called:', { 
@@ -786,16 +800,32 @@ export default function TasksPage() {
       </div>
 
       {/* Search */}
-      <Card className="mb-6 mx-6">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Поиск по названию или описанию..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+      <Card className="mb-6 mx-6 overflow-visible">
+        <CardContent className="p-4 overflow-visible">
+          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Поиск по названию или описанию..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="w-full sm:w-48 overflow-visible">
+              <CustomSelect
+                value={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Статус"
+                options={[
+                  { value: "all", label: "Все статусы" },
+                  { value: "new", label: "Новая" },
+                  { value: "in_progress", label: "В работе" },
+                  { value: "done", label: "Выполнена" },
+                  { value: "cancelled", label: "Отменена" },
+                ]}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

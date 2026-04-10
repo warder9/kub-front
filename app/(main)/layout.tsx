@@ -8,12 +8,11 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
       <RoleBasedSidebar />
-      <div className="flex flex-col flex-1">
-        {/* <MobileHeader title="Dashboard" /> */}
-        <main className="flex-1 overflow-y-auto bg-gray-100">
-          <div className="">{children}</div>
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-gradient-to-br from-transparent to-white/50 relative">
+          <div className="p-6 min-h-full">{children}</div>
         </main>
       </div>
     </div>

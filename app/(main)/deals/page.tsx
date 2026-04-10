@@ -210,7 +210,7 @@ export default function DealsPage() {
     setIsLoading(true);
     try {
       const { list_deals, list_my_deals } = await import("@/src/api/deals.api");
-      const params: any = { page: currentPage, limit };
+      const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
 
@@ -229,24 +229,35 @@ export default function DealsPage() {
 
       // Only allow 'all' view for system_admin, leadership, and management roles explicitly
       const effectiveView = (userRole === 'system_admin' || userRole === 'leadership' || userRole === 'management') ? 'all' : 'my';
-      
-      console.log('fetchDeals called:', { 
+
+      console.log('fetchDeals called:', {
         userRole,
         currentUserRole: currentUser?.role,
         stateUserRole: user?.role,
         effectiveView,
         endpoint: effectiveView === "all" ? '/deals' : '/deals/my'
       });
-      
+
       // Use effectiveView as finalView (no extra safeguard needed)
       const finalView = effectiveView;
-      
+
       const dealsRes = finalView === "all"
         ? await list_deals(undefined, params)
         : await list_my_deals(undefined, params);
-      
-      const dealsData = (dealsRes?.data || (Array.isArray(dealsRes) ? dealsRes : []));
-      const total = dealsRes?.total || dealsData.length;
+
+      let dealsData = (dealsRes?.data || (Array.isArray(dealsRes) ? dealsRes : []));
+      let total = dealsRes?.total || dealsData.length;
+
+      // Client-side filtering as fallback if backend doesn't support status filter
+      if (statusFilter !== "all") {
+        const filteredData = dealsData.filter((deal: any) => deal.status === statusFilter);
+        // Only use filtered count if backend didn't filter
+        if (filteredData.length !== dealsData.length) {
+          console.log('Backend did not filter by status, applying client-side filter');
+          dealsData = filteredData;
+          total = filteredData.length;
+        }
+      }
 
       setDeals(dealsData);
       setTotalDeals(total);
@@ -846,15 +857,13 @@ export default function DealsPage() {
     return lead ? lead.title : `Лид #${leadId}`;
   };
 
-  // Filtered deals
+  // Filtered deals (search only, status is filtered in fetchDeals)
   const filteredDeals = (deals || []).filter((deal) => {
     const matchesSearch =
       (deal.amount?.toString() || "").includes(searchTerm) ||
       getClientName(deal.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       getLeadTitle(deal.lead_id).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || deal.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   // Calculate statistics
@@ -975,9 +984,9 @@ export default function DealsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+      <Card className="mb-6 overflow-visible">
+        <CardContent className="p-4 overflow-visible">
+          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -989,20 +998,22 @@ export default function DealsPage() {
                 />
               </div>
             </div>
-            <CustomSelect
-              value={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="Статус"
-              className="w-full sm:w-48"
-              options={[
-                { value: "all", label: "Все статусы" },
-                { value: "new", label: "Новая" },
-                { value: "in_progress", label: "В работе" },
-                { value: "won", label: "Выиграна" },
-                { value: "lost", label: "Проиграна" },
-                { value: "cancelled", label: "Отменена" },
-              ]}
-            />
+            <div className="w-full sm:w-48 overflow-visible">
+              <CustomSelect
+                value={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Статус"
+                className="w-full"
+                options={[
+                  { value: "all", label: "Все статусы" },
+                  { value: "new", label: "Новая" },
+                  { value: "in_progress", label: "В работе" },
+                  { value: "won", label: "Выиграна" },
+                  { value: "lost", label: "Проиграна" },
+                  { value: "cancelled", label: "Отменена" },
+                ]}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -754,12 +754,12 @@ useEffect(() => {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 animate-fade-in">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
             {clientView === "my" ? "Мои клиенты" : "Клиенты"}
           </h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-600 mt-1">
             {clientView === "my" ? "Управление моими клиентами" : "Управление базой клиентов"}
           </p>
         </div>
@@ -781,7 +781,7 @@ useEffect(() => {
               Обновить
             </Button>
             {canCreate && (
-              <Button onClick={handleCreateClick}>
+              <Button onClick={handleCreateClick} className="gradient-primary hover:opacity-90">
                 <Plus className="h-4 w-4 mr-2" />
                 Добавить клиента
               </Button>
@@ -789,10 +789,10 @@ useEffect(() => {
           </div>
       </div>
 
-      <Card>
-        <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
+      <Card className="mb-6 overflow-visible">
+        <CardContent className="p-4 flex flex-col sm:flex-row gap-4 overflow-visible">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Введите данные для поиска..."
               value={searchTerm}
@@ -800,21 +800,24 @@ useEffect(() => {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <CustomSelect
-              value={clientTypeFilter}
-              onChange={(value) => setClientTypeFilter(value)}
-              placeholder="Тип клиента"
-              options={[
-                { value: "", label: "Все типы" },
-                { value: "individual", label: "Физическое лицо" },
-                { value: "legal", label: "Юридическое лицо" },
-              ]}
-            />
+          <div className="flex items-center gap-2 flex-shrink-0 overflow-visible">
+            <div className="w-48 relative overflow-visible">
+              <CustomSelect
+                value={clientTypeFilter}
+                onChange={(value) => setClientTypeFilter(value)}
+                placeholder="Тип клиента"
+                options={[
+                  { value: "", label: "Все типы" },
+                  { value: "individual", label: "Физическое лицо" },
+                  { value: "legal", label: "Юридическое лицо" },
+                ]}
+              />
+            </div>
             {user?.role !== 'sales' && (
               <Button
                 variant={clientView === "all" ? "secondary" : "outline"}
                 onClick={() => setClientView("all")}
+                className="whitespace-nowrap"
               >
                 Все клиенты
               </Button>
@@ -822,6 +825,7 @@ useEffect(() => {
             <Button
               variant={clientView === "my" ? "secondary" : "outline"}
               onClick={() => setClientView("my")}
+              className="whitespace-nowrap"
             >
               Мои клиенты
             </Button>
@@ -829,7 +833,7 @@ useEffect(() => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader>
           <CardTitle>Список клиентов</CardTitle>
           <CardDescription>
@@ -838,7 +842,7 @@ useEffect(() => {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="animate-fade-in">
               <TableHeader>
                 <TableRow>
                   <TableHead>Название/Имя</TableHead>

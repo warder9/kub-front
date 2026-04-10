@@ -405,26 +405,28 @@ export function RoleBasedSidebar() {
   return (
     <div
       className={cn(
-        "bg-white border-r border-gray-200 transition-all duration-300 flex flex-col h-screen sticky top-0 z-30",
+        "bg-gradient-to-b from-slate-50 to-white border-r border-slate-200/60 transition-all duration-300 flex flex-col h-screen sticky top-0 z-30 shadow-soft",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-slate-200/60">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <div className="flex items-center space-x-2">
-              <Building2 className="h-6 w-6 text-primary" />
-              <span className="font-semibold text-lg">CRM</span>
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 gradient-primary rounded-lg flex items-center justify-center shadow-md">
+                <Building2 className="h-5 w-5 text-white" />
+              </div>
+              <span className="font-bold text-lg bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">CRM</span>
             </div>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-xl hover:bg-gray-100"
+            className="p-2 rounded-lg hover:bg-slate-100 transition-all duration-200"
           >
             {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 text-slate-600" />
             ) : (
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 text-slate-600" />
             )}
           </button>
         </div>
@@ -432,19 +434,19 @@ export function RoleBasedSidebar() {
 
       {/* User Info */}
       {!isCollapsed && (
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-slate-200/60">
           <div className="flex items-center space-x-3 mb-3">
-            <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center text-white text-sm font-medium">
+            <div className="w-10 h-10 gradient-primary rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
               {user.company_name[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base font-medium text-gray-900 truncate">
+              <p className="text-sm font-semibold text-slate-900 truncate">
                 {user?.company_name}
               </p>
-              <p className="text-sm text-gray-500 truncate">
+              <p className="text-xs text-slate-500 truncate">
                 {user?.email}
               </p>
-              <p className="text-sm font-bold text-primary truncate">
+              <p className="text-xs font-semibold text-blue-600 truncate mt-0.5">
                 {displayRole}
               </p>
             </div>
@@ -453,8 +455,8 @@ export function RoleBasedSidebar() {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {filteredItems.map((item) => {
+      <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto custom-scrollbar">
+        {filteredItems.map((item, index) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -463,35 +465,36 @@ export function RoleBasedSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-1 space-x-3 px-3  py-3 rounded-xl text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 animate-fade-in",
                 isActive
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-700 hover:bg-gray-300", isCollapsed && "justify-center"
+                  ? "gradient-primary text-white shadow-md hover:shadow-lg"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+                isCollapsed && "justify-center px-2"
               )}
+              style={{ animationDelay: `${index * 50}ms` }}
               title={isCollapsed ? item.title : undefined}
             >
               <item.icon
                 className={cn(
-                  "h-5 w-5 flex-shrink-0",
-                  isActive ? "text-white" : "text-gray-500"
+                  "h-5 w-5 flex-shrink-0 transition-transform duration-200",
+                  isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700",
+                  "group-hover:scale-110"
                 )}
               />
               {!isCollapsed && (
-                <>
-                  <span className="flex-1">{item.title}</span>
-                  {item.badge && (
-                    <span
-                      className={cn(
-                        "text-xs rounded-full px-2 py-0.5",
-                        isActive
-                          ? "bg-white text-gray-600"
-                          : "bg-gray-500 text-white"
-                      )}
-                    >
-                      {item.badge}
-                    </span>
+                <span className="flex-1">{item.title}</span>
+              )}
+              {!isCollapsed && item.badge && (
+                <span
+                  className={cn(
+                    "text-xs rounded-full px-2 py-0.5 font-medium",
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-blue-100 text-blue-700"
                   )}
-                </>
+                >
+                  {item.badge}
+                </span>
               )}
             </Link>
           );
@@ -499,13 +502,13 @@ export function RoleBasedSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-3 border-t border-slate-200/60">
         {!isCollapsed ? (
           <div className="space-y-2">
             {/* Logout Button */}
             <button
               onClick={handleLogout}
-              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
+              className="w-full flex items-center space-x-2 px-3 py-2.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
               <span>Выйти</span>
@@ -514,7 +517,7 @@ export function RoleBasedSidebar() {
         ) : (
           <button
             onClick={handleLogout}
-            className="w-full p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
+            className="w-full p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200"
             title="Выйти"
           >
             <LogOut className="h-4 w-4" />

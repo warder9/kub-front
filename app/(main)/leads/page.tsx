@@ -208,16 +208,27 @@ export default function LeadsPage() {
       const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
       const shouldUseMyView = view === "my" || userRole === 'sales';
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
-      const params: any = { page: currentPage, limit };
+      const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
 
       console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads', 'userRole:', userRole, 'shouldUseMyView:', shouldUseMyView);
       const res = await fetchFn(undefined, params);
-      const data = (res?.data || (Array.isArray(res) ? res : []));
-      const total = res?.total || data.length;
+      let data = (res?.data || (Array.isArray(res) ? res : []));
+      let total = res?.total || data.length;
 
       console.log('API response:', { data: data.slice(0, 3), total: total, dataLength: data.length });
+
+      // Client-side filtering as fallback if backend doesn't support status filter
+      if (statusFilter !== "all") {
+        const filteredData = data.filter((lead: Lead) => lead.status === statusFilter);
+        // Only use filtered count if backend didn't filter
+        if (filteredData.length !== data.length) {
+          console.log('Backend did not filter by status, applying client-side filter');
+          data = filteredData;
+          total = filteredData.length;
+        }
+      }
 
       setLeads(data);
       setTotalLeads(total);
@@ -433,6 +444,7 @@ export default function LeadsPage() {
         lead_id: selectedLead.id,
         owner_id: selectedLead.owner_id,
         client_id: Number(convertLeadData.client_id),
+        amount: Number(convertLeadData.amount),
         status: 'new',
       };
       await dealsApi.create_deal(dealPayload);
@@ -619,9 +631,9 @@ export default function LeadsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mx-6 mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+      <Card className="mx-6 mb-6 overflow-visible">
+        <CardContent className="p-4 overflow-visible">
+          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -635,7 +647,7 @@ export default function LeadsPage() {
             </div>
             {/* View selector - only for non-sales users */}
             {user && getRoleFromId(user.role_id || 0) !== 'sales' && (
-              <div className="w-full sm:w-48">
+              <div className="w-full sm:w-48 overflow-visible">
                 <CustomSelect
                   value={view}
                   onChange={(val) => setView(val as "all" | "my")}
@@ -647,7 +659,7 @@ export default function LeadsPage() {
                 />
               </div>
             )}
-            <div className="w-full sm:w-48">
+            <div className="w-full sm:w-48 overflow-visible">
               <CustomSelect
                 value={statusFilter}
                 onChange={setStatusFilter}
