@@ -179,14 +179,16 @@ export default function DealsPage() {
   const FINAL_STATUSES = ["won", "lost", "cancelled"];
 
   const allowedTransitions: Record<string, string[]> = {
-    new: ["in_progress", "won", "lost", "cancelled"],
-    in_progress: ["won", "lost", "cancelled"],
+    new: ["in_progress", "negotiation", "won", "lost", "cancelled"],
+    in_progress: ["negotiation", "won", "lost", "cancelled"],
+    negotiation: ["won", "lost", "cancelled"],
     // won, lost, cancelled are final — no transitions
   };
 
   const statusLabelMap: Record<string, string> = {
     new: "Новая",
     in_progress: "В работе",
+    negotiation: "Переговоры",
     won: "Выиграна",
     lost: "Проиграна",
     cancelled: "Отменена",
@@ -657,6 +659,7 @@ export default function DealsPage() {
     const statusConfig: Record<string, { label: string; className: string }> = {
       new: { label: "Новая", className: "bg-blue-100 text-blue-800" },
       in_progress: { label: "В работе", className: "bg-yellow-100 text-yellow-800" },
+      negotiation: { label: "Переговоры", className: "bg-purple-100 text-purple-800" },
       won: { label: "Выиграна", className: "bg-green-100 text-green-800" },
       lost: { label: "Проиграна", className: "bg-red-100 text-red-800" },
       cancelled: { label: "Отменена", className: "bg-gray-100 text-gray-800" },
@@ -684,13 +687,27 @@ export default function DealsPage() {
 
   // Handle create deal
   const handleCreateDeal = async () => {
+    // Validate required fields
+    if (!newDeal.lead_id) {
+      toast.error("Выберите лид");
+      return;
+    }
+    if (!newDeal.client_id) {
+      toast.error("Выберите клиента");
+      return;
+    }
+    if (!newDeal.amount || newDeal.amount <= 0) {
+      toast.error("Введите сумму больше 0");
+      return;
+    }
+
     try {
       setIsLoading(true);
       const { create_deal } = await import("@/src/api/deals.api");
 
       const payload = {
-        lead_id: newDeal.lead_id ? Number(newDeal.lead_id) : undefined,
-        client_id: newDeal.client_id ? Number(newDeal.client_id) : undefined,
+        lead_id: Number(newDeal.lead_id),
+        client_id: Number(newDeal.client_id),
         client_type: newDeal.client_type || "individual",
         owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
         amount: Number(newDeal.amount),
@@ -708,7 +725,19 @@ export default function DealsPage() {
     } catch (err: any) {
       console.error("Error creating deal:", err);
       console.error("Error response data:", err?.response?.data);
-      toast.error(err?.response?.data?.message || err?.message || "Ошибка при создании сделки");
+      
+      const errorMsg = err?.response?.data?.message || err?.message || "Ошибка при создании сделки";
+      
+      // Check for specific error types
+      if (err?.response?.status === 409) {
+        if (errorMsg.includes("deal already exists") || errorMsg.includes("Invalid deal state")) {
+          toast.error("Этот лид уже имеет связанную сделку. Выберите другой лид.");
+        } else {
+          toast.error(errorMsg);
+        }
+      } else {
+        toast.error(errorMsg);
+      }
     } finally {
       setIsCreateDialogOpen(false);
       setIsLoading(false);
@@ -1300,10 +1329,11 @@ export default function DealsPage() {
                 placeholder="Выберите статус"
                 options={[
                   { value: "new", label: "Новая" },
-                  { value: "draft", label: "Черновик" },
+                  { value: "in_progress", label: "В работе" },
                   { value: "negotiation", label: "Переговоры" },
-                  { value: "proposal_sent", label: "Предложение отправлено" },
-                  { value: "contract_sent", label: "Договор отправлен" },
+                  { value: "won", label: "Выиграна" },
+                  { value: "lost", label: "Проиграна" },
+                  { value: "cancelled", label: "Отменена" },
                 ]}
               />
             </div>
@@ -1441,6 +1471,7 @@ export default function DealsPage() {
                 options={[
                   { value: "new", label: "Новая" },
                   { value: "in_progress", label: "В работе" },
+                  { value: "negotiation", label: "Переговоры" },
                   { value: "won", label: "Выиграна" },
                   { value: "lost", label: "Проиграна" },
                   { value: "cancelled", label: "Отменена" },

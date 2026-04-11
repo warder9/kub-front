@@ -429,18 +429,40 @@ export default function DocumentsPage() {
             const params: any = { page: currentPage, size }
             let res
             
+            console.log('=== FETCH DOCUMENTS DEBUG ===')
+            console.log('User role:', user?.role)
+            console.log('User role_id:', user?.role_id)
+            console.log('Selected deal ID:', selectedDealId)
+            console.log('Params:', params)
+            
             // Sales users can only access documents for specific deals
             if (currentUser?.role === 'sales' && selectedDealId) {
+                console.log('Sales user with selected deal, calling getDocumentsByDeal')
                 res = await getDocumentsByDeal(selectedDealId, params)
             } else {
+                console.log('Non-sales user or no deal selected, calling getDocuments')
                 res = await getDocuments(params)
             }
             
+            console.log('Documents response:', res)
+            console.log('Response type:', Array.isArray(res) ? 'array' : 'object')
+            
             const data = Array.isArray(res) ? res : (res as any)?.data || []
+            const total = (res as any)?.total || data.length
+            
+            console.log('Documents count:', data.length)
+            console.log('Total documents:', total)
+            
             setDocuments(data)
-            setTotalDocuments((res as any)?.total || data.length)
+            setTotalDocuments(total)
         } catch (err: any) {
             console.error("Error loading documents:", err)
+            console.error('Error details:', {
+                status: err?.response?.status,
+                statusText: err?.response?.statusText,
+                data: err?.response?.data,
+                message: err?.message
+            })
             toast.error(err?.message || "Ошибка при загрузке документов")
             setDocuments([])
             setTotalDocuments(0)

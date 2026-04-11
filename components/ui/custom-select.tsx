@@ -186,16 +186,17 @@ export function CustomSelect({
         <div
           ref={dropdownRef}
           className={cn(
-            "fixed overflow-hidden rounded-xl border bg-white shadow-lg",
+            "fixed overflow-hidden rounded-xl border bg-white shadow-lg pointer-events-auto",
             "animate-in fade-in-0 zoom-in-95",
           )}
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
-            zIndex: 9999,
+            zIndex: 99999,
           }}
           role="listbox"
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="max-h-96 overflow-y-auto p-1">
             {options.length === 0 ? (

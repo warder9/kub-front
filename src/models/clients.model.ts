@@ -1,74 +1,87 @@
 export interface Client {
   id: string;
   client_type?: string | null;
-  // Organization info
+  // Common fields
   name?: string | null;
   bin_iin?: string | null;
   address?: string | null;
+  actual_address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  photo_35x45?: string | null;
   contact_info?: string | null;
-  // Legal entity banking fields
+  owner_id?: number | null;
+  display_name?: string | null;
+  primary_phone?: string | null;
+  primary_email?: string | null;
+  created_at: string;
+  updated_at: string;
+  
+  // Legal entity specific fields (in main table)
   contact_person_position?: string | null;
   bank_name?: string | null;
   iban?: string | null;
   bik?: string | null;
   kbe?: string | null;
+  
+  // Legal profile (from client_legal_profiles table)
   legal_profile?: {
     company_name?: string;
     bin?: string;
-    legal_address?: string;
+    legal_form?: string;
+    director_full_name?: string;
     contact_person_name?: string;
     contact_person_position?: string;
     contact_person_phone?: string;
     contact_person_email?: string;
+    legal_address?: string;
     actual_address?: string;
     bank_name?: string;
     iban?: string;
     bik?: string;
     kbe?: string;
-    };
+    tax_regime?: string;
+    website?: string;
+    industry?: string;
+    company_size?: string;
+    additional_info?: string;
+  };
   
-  // Required fields (RED)
-  country: string;
-  trip_purpose: string;
-  last_name: string;
-  first_name: string;
-  birth_date: string;
-  phone: string;
-  
-  // Additional required fields
+  // Individual specific fields (from client_individual_profiles table)
+  last_name?: string | null;
+  first_name?: string | null;
   middle_name?: string | null;
-  birth_place?: string | null;
-  citizenship?: string | null;
-  gender?: string | null;
-  marital_status?: string | null;
   iin?: string | null;
   id_number?: string | null;
   passport_series?: string | null;
   passport_number?: string | null;
-  passport_issue_date?: string | null;
-  passport_expiry_date?: string | null;
   registration_address?: string | null;
-  actual_address?: string | null;
-  email?: string | null;
-  photo_35x45?: string | null;
-  
-  // Optional fields
-  former_maiden_name?: string | null;
-  spouse_info?: string | null;
-  children_info?: string | null;
+  country?: string | null;
+  trip_purpose?: string | null;
+  birth_date?: string | null;
+  birth_place?: string | null;
+  citizenship?: string | null;
+  sex?: string | null;
+  marital_status?: string | null;
+  passport_issue_date?: string | null;
+  passport_expire_date?: string | null;
+  previous_last_name?: string | null;
+  spouse_name?: string | null;
+  spouse_contacts?: string | null;
+  has_children?: boolean | null;
+  children_list?: any | null;
   education?: string | null;
-  work_place_position?: string | null;
-  trips_visas_5years?: string | null;
-  family_members_abroad?: string | null;
-  authorized_person?: string | null;
-  height_weight?: string | null;
-  driving_license_categories?: string | null;
-  therapist_clinic?: string | null;
-  illnesses_injuries_3years?: string | null;
+  job?: string | null;
+  trips_last5_years?: string | null;
+  relatives_in_destination?: string | null;
+  trusted_person?: string | null;
+  height?: number | null;
+  weight?: number | null;
+  driver_license_categories?: any | null;
+  therapist_name?: string | null;
+  clinic_name?: string | null;
+  diseases_last3_years?: string | null;
   additional_info?: string | null;
-  
-  created_at: string;
-  updated_at: string;
 }
 
 export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at"> & {
@@ -76,14 +89,23 @@ export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at
   legal_profile?: {
     company_name?: string;
     bin?: string;
-    legal_address?: string;
+    legal_form?: string;
+    director_full_name?: string;
     contact_person_name?: string;
-    contact_person_phone?: string;
     contact_person_position?: string;
+    contact_person_phone?: string;
+    contact_person_email?: string;
+    legal_address?: string;
+    actual_address?: string;
     bank_name?: string;
     iban?: string;
     bik?: string;
     kbe?: string;
+    tax_regime?: string;
+    website?: string;
+    industry?: string;
+    company_size?: string;
+    additional_info?: string;
   };
 };
 

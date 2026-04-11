@@ -77,59 +77,83 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
 const EMPTY_CLIENT: Models.CreateClientRequest = {
-  // Organization info
+  // Common fields
   name: "",
   bin_iin: "",
   address: "",
+  actual_address: "",
+  phone: "",
+  email: "",
   contact_info: "",
   client_type: "individual",
-
-  // Legal entity banking fields
+  owner_id: 0,
+  
+  // Legal entity banking fields (main table)
   contact_person_position: "",
   bank_name: "",
   iban: "",
   bik: "",
   kbe: "",
-
-  // Required fields (RED)
-  country: "",
-  trip_purpose: "",
+  
+  // Legal profile structure
+  legal_profile: {
+    company_name: "",
+    bin: "",
+    legal_form: "",
+    director_full_name: "",
+    contact_person_name: "",
+    contact_person_position: "",
+    contact_person_phone: "",
+    contact_person_email: "",
+    legal_address: "",
+    actual_address: "",
+    bank_name: "",
+    iban: "",
+    bik: "",
+    kbe: "",
+    tax_regime: "",
+    website: "",
+    industry: "",
+    company_size: "",
+    additional_info: "",
+  },
+  
+  // Individual specific fields (optional for legal clients)
   last_name: "",
   first_name: "",
-  birth_date: "",
-  phone: "",
-  
-  // Additional required fields
   middle_name: "",
-  birth_place: "",
-  citizenship: "",
-  gender: "",
-  marital_status: "",
   iin: "",
   id_number: "",
   passport_series: "",
   passport_number: "",
-  passport_issue_date: "",
-  passport_expiry_date: "",
   registration_address: "",
-  actual_address: "",
-  email: "",
-  photo_35x45: "",
-  
-  // Optional fields
-  former_maiden_name: "",
-  spouse_info: "",
-  children_info: "",
+  country: "",
+  trip_purpose: "",
+  birth_date: "",
+  birth_place: "",
+  citizenship: "",
+  sex: "",
+  marital_status: "",
+  passport_issue_date: "",
+  passport_expire_date: "",
+  previous_last_name: "",
+  spouse_name: "",
+  spouse_contacts: "",
+  has_children: false,
+  children_list: "",
   education: "",
-  work_place_position: "",
-  trips_visas_5years: "",
-  family_members_abroad: "",
-  authorized_person: "",
-  height_weight: "",
-  driving_license_categories: "",
-  therapist_clinic: "",
-  illnesses_injuries_3years: "",
+  job: "",
+  trips_last5_years: "",
+  relatives_in_destination: "",
+  trusted_person: "",
+  height: 0,
+  weight: 0,
+  driver_license_categories: "",
+  therapist_name: "",
+  clinic_name: "",
+  diseases_last3_years: "",
   additional_info: "",
+  photo_35x45: "",
 };
 
 const DetailItem = ({ label, value }: { label: string; value?: string | null }) => (
@@ -485,7 +509,25 @@ useEffect(() => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { id, value } = e.target;
-    setClientFormData((prev) => ({ ...prev, [id]: value }));
+    // Convert height and weight to numbers
+    if (id === 'height' || id === 'weight') {
+      setClientFormData((prev) => ({ ...prev, [id]: value ? Number(value) : 0 }));
+    } else if (['legal_form', 'director_full_name', 'tax_regime', 'website', 'industry', 'company_size'].includes(id)) {
+      // Handle legal_profile nested fields
+      setClientFormData((prev) => ({
+        ...prev,
+        legal_profile: {
+          ...prev.legal_profile,
+          [id]: value
+        }
+      }));
+    } else {
+      setClientFormData((prev) => ({ ...prev, [id]: value }));
+    }
+  };
+
+  const handleBooleanChange = (id: string, value: string) => {
+    setClientFormData((prev) => ({ ...prev, [id]: value === 'true' }));
   };
 
   const handleCreateClick = () => {
@@ -523,32 +565,36 @@ useEffect(() => {
       middle_name: client.middle_name || "",
       birth_place: client.birth_place || "",
       citizenship: client.citizenship || "",
-      gender: client.gender || "",
+      sex: client.sex || "",
       marital_status: client.marital_status || "",
       iin: client.iin || "",
       id_number: client.id_number || "",
       passport_series: client.passport_series || "",
       passport_number: client.passport_number || "",
       passport_issue_date: client.passport_issue_date || "",
-      passport_expiry_date: client.passport_expiry_date || "",
+      passport_expire_date: client.passport_expire_date || "",
       registration_address: client.registration_address || "",
       actual_address: client.actual_address || "",
       email: client.email || "",
       photo_35x45: client.photo_35x45 || "",
       
       // Optional fields
-      former_maiden_name: client.former_maiden_name || "",
-      spouse_info: client.spouse_info || "",
-      children_info: client.children_info || "",
+      previous_last_name: client.previous_last_name || "",
+      spouse_name: client.spouse_name || "",
+      spouse_contacts: client.spouse_contacts || "",
+      has_children: client.has_children || false,
+      children_list: client.children_list || "",
       education: client.education || "",
-      work_place_position: client.work_place_position || "",
-      trips_visas_5years: client.trips_visas_5years || "",
-      family_members_abroad: client.family_members_abroad || "",
-      authorized_person: client.authorized_person || "",
-      height_weight: client.height_weight || "",
-      driving_license_categories: client.driving_license_categories || "",
-      therapist_clinic: client.therapist_clinic || "",
-      illnesses_injuries_3years: client.illnesses_injuries_3years || "",
+      job: client.job || "",
+      trips_last5_years: client.trips_last5_years || "",
+      relatives_in_destination: client.relatives_in_destination || "",
+      trusted_person: client.trusted_person || "",
+      height: client.height || 0,
+      weight: client.weight || 0,
+      driver_license_categories: client.driver_license_categories || "",
+      therapist_name: client.therapist_name || "",
+      clinic_name: client.clinic_name || "",
+      diseases_last3_years: client.diseases_last3_years || "",
       additional_info: client.additional_info || "",
     });
     setIsFormOpen(true);
@@ -601,16 +647,16 @@ useEffect(() => {
   };
 
   const validateRequiredFields = (): boolean => {
-    const requiredFields = ['client_type'];
+    const requiredFields = ['client_type', 'phone'];
 
     // Individual-specific required fields
-    if (clientFormData.client_type !== "legal") {
-      requiredFields.push('country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'phone');
+    if (clientFormData.client_type === "individual") {
+      requiredFields.push('last_name', 'first_name');
     }
 
     // Legal-specific required fields
     if (clientFormData.client_type === "legal") {
-      requiredFields.push('name', 'bin_iin', 'address', 'contact_info', 'phone');
+      requiredFields.push('name', 'bin_iin');
     }
 
     const missingFields = requiredFields.filter(field => !clientFormData[field as keyof Models.CreateClientRequest]);
@@ -691,21 +737,85 @@ useEffect(() => {
     
     console.log('Validation passed - proceeding with API call');
 
-    // Prepare payload with legal_profile for legal clients
-    const payload = { ...clientFormData };
+    // Prepare payload - only send relevant fields based on client_type
+    const payload: any = {
+      client_type: clientFormData.client_type,
+      // Common fields
+      name: clientFormData.name || "",
+      bin_iin: clientFormData.bin_iin || "",
+      address: clientFormData.address || "",
+      actual_address: clientFormData.actual_address || "",
+      phone: clientFormData.phone || "",
+      email: clientFormData.email || "",
+      contact_info: clientFormData.contact_info || "",
+      // Banking fields (main table)
+      contact_person_position: clientFormData.contact_person_position || "",
+      bank_name: clientFormData.bank_name || "",
+      iban: clientFormData.iban || "",
+      bik: clientFormData.bik || "",
+      kbe: clientFormData.kbe || "",
+      photo_35x45: clientFormData.photo_35x45 || "",
+    };
+
+    // Add legal_profile for legal clients
     if (clientFormData.client_type === "legal") {
       payload.legal_profile = {
         company_name: clientFormData.name || "",
         bin: clientFormData.bin_iin || "",
-        legal_address: clientFormData.address || "",
+        legal_form: clientFormData.legal_profile?.legal_form || "",
+        director_full_name: clientFormData.legal_profile?.director_full_name || "",
         contact_person_name: clientFormData.contact_info || "",
-        contact_person_phone: clientFormData.phone || "",
         contact_person_position: clientFormData.contact_person_position || "",
+        contact_person_phone: clientFormData.phone || "",
+        contact_person_email: clientFormData.email || "",
+        legal_address: clientFormData.address || "",
+        actual_address: clientFormData.actual_address || "",
         bank_name: clientFormData.bank_name || "",
         iban: clientFormData.iban || "",
         bik: clientFormData.bik || "",
         kbe: clientFormData.kbe || "",
+        tax_regime: clientFormData.legal_profile?.tax_regime || "",
+        website: clientFormData.legal_profile?.website || "",
+        industry: clientFormData.legal_profile?.industry || "",
+        company_size: clientFormData.legal_profile?.company_size || "",
+        additional_info: clientFormData.legal_profile?.additional_info || "",
       };
+    } else {
+      // Individual client fields
+      payload.last_name = clientFormData.last_name || "";
+      payload.first_name = clientFormData.first_name || "";
+      payload.middle_name = clientFormData.middle_name || "";
+      payload.iin = clientFormData.iin || "";
+      payload.id_number = clientFormData.id_number || "";
+      payload.passport_series = clientFormData.passport_series || "";
+      payload.passport_number = clientFormData.passport_number || "";
+      payload.registration_address = clientFormData.registration_address || "";
+      payload.country = clientFormData.country || "";
+      payload.trip_purpose = clientFormData.trip_purpose || "";
+      payload.birth_date = clientFormData.birth_date || "";
+      payload.birth_place = clientFormData.birth_place || "";
+      payload.citizenship = clientFormData.citizenship || "";
+      payload.sex = clientFormData.sex || "";
+      payload.marital_status = clientFormData.marital_status || "";
+      payload.passport_issue_date = clientFormData.passport_issue_date || "";
+      payload.passport_expire_date = clientFormData.passport_expire_date || "";
+      payload.previous_last_name = clientFormData.previous_last_name || "";
+      payload.spouse_name = clientFormData.spouse_name || "";
+      payload.spouse_contacts = clientFormData.spouse_contacts || "";
+      payload.has_children = clientFormData.has_children || false;
+      payload.children_list = clientFormData.children_list || "";
+      payload.education = clientFormData.education || "";
+      payload.job = clientFormData.job || "";
+      payload.trips_last5_years = clientFormData.trips_last5_years || "";
+      payload.relatives_in_destination = clientFormData.relatives_in_destination || "";
+      payload.trusted_person = clientFormData.trusted_person || "";
+      payload.height = clientFormData.height || 0;
+      payload.weight = clientFormData.weight || 0;
+      payload.driver_license_categories = clientFormData.driver_license_categories || "";
+      payload.therapist_name = clientFormData.therapist_name || "";
+      payload.clinic_name = clientFormData.clinic_name || "";
+      payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
+      payload.additional_info = clientFormData.additional_info || "";
     }
 
     try {
@@ -1102,137 +1212,141 @@ useEffect(() => {
                 </div>
               )}
 
-              {/* Personal Information */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <UserIcon className="h-5 w-5" />
-                  Персональная информация
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="middle_name">Отчество</Label>
-                    <Input id="middle_name" placeholder="Введите отчество..." value={clientFormData.middle_name || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="birth_place">Место рождения</Label>
-                    <Input id="birth_place" placeholder="Страна/область/город/село..." value={clientFormData.birth_place || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="citizenship">Гражданство</Label>
-                    <Input id="citizenship" placeholder="Введите гражданство..." value={clientFormData.citizenship || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="gender">Пол</Label>
-                    <CustomSelect
-                      value={clientFormData.gender || ""}
-                      onChange={(value) => setClientFormData(prev => ({ ...prev, gender: value }))}
-                      options={[
-                        { value: "male", label: "Мужской" },
-                        { value: "female", label: "Женский" }
-                      ]}
-                      placeholder="Выберите пол..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="marital_status">Гражданское состояние</Label>
-                    <CustomSelect
-                      value={clientFormData.marital_status || ""}
-                      onChange={(value) => setClientFormData(prev => ({ ...prev, marital_status: value }))}
-                      options={[
-                        { value: "single", label: "Холост/Не замужем" },
-                        { value: "married", label: "Женат/Замужем" },
-                        { value: "divorced", label: "Разведен(а)" },
-                        { value: "widowed", label: "Вдовец/Вдова" }
-                      ]}
-                      placeholder="Выберите состояние..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="iin">ИИН</Label>
-                    <Input id="iin" placeholder="Введите ИИН..." value={clientFormData.iin || ""} onChange={handleFormChange} />
+              {/* Personal Information - only for individual clients */}
+              {clientFormData.client_type === "individual" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <UserIcon className="h-5 w-5" />
+                    Персональная информация
+                  </h3>
+                  <Separator />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="middle_name">Отчество</Label>
+                      <Input id="middle_name" placeholder="Введите отчество..." value={clientFormData.middle_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="birth_place">Место рождения</Label>
+                      <Input id="birth_place" placeholder="Страна/область/город/село..." value={clientFormData.birth_place || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="citizenship">Гражданство</Label>
+                      <Input id="citizenship" placeholder="Введите гражданство..." value={clientFormData.citizenship || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="sex">Пол</Label>
+                      <CustomSelect
+                        value={clientFormData.sex || ""}
+                        onChange={(value) => setClientFormData(prev => ({ ...prev, sex: value }))}
+                        options={[
+                          { value: "male", label: "Мужской" },
+                          { value: "female", label: "Женский" }
+                        ]}
+                        placeholder="Выберите пол..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="marital_status">Гражданское состояние</Label>
+                      <CustomSelect
+                        value={clientFormData.marital_status || ""}
+                        onChange={(value) => setClientFormData(prev => ({ ...prev, marital_status: value }))}
+                        options={[
+                          { value: "single", label: "Холост/Не замужем" },
+                          { value: "married", label: "Женат/Замужем" },
+                          { value: "divorced", label: "Разведен(а)" },
+                          { value: "widowed", label: "Вдовец/Вдова" }
+                        ]}
+                        placeholder="Выберите состояние..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="iin">ИИН</Label>
+                      <Input id="iin" placeholder="Введите ИИН..." value={clientFormData.iin || ""} onChange={handleFormChange} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Document Information */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Документы
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="id_number">Номер удостоверения</Label>
-                    <Input id="id_number" placeholder="Введите № удостоверения..." value={clientFormData.id_number || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="passport_series">Серия паспорта</Label>
-                    <Input id="passport_series" placeholder="Введите серию паспорта..." value={clientFormData.passport_series || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="passport_number">Номер паспорта</Label>
-                    <Input id="passport_number" placeholder="Введите номер паспорта..." value={clientFormData.passport_number || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
-                    <Input id="passport_issue_date" type="date" value={clientFormData.passport_issue_date || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="passport_expiry_date">Дата окончания паспорта</Label>
-                    <Input id="passport_expiry_date" type="date" value={clientFormData.passport_expiry_date || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
-                    <div className="space-y-2">
-                      {photoPreview ? (
-                        <div className="relative">
-                          <img 
-                            src={photoPreview} 
-                            alt="Preview" 
-                            className="w-32 h-40 object-cover rounded border border-gray-200"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="absolute top-1 right-1 h-6 w-6 p-0"
-                            onClick={clearPhoto}
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                          <div className="text-center">
-                            <div className="text-gray-400 mb-2">
+              {/* Document Information - only for individual clients */}
+              {clientFormData.client_type === "individual" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Документы
+                  </h3>
+                  <Separator />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="id_number">Номер удостоверения</Label>
+                      <Input id="id_number" placeholder="Введите № удостоверения..." value={clientFormData.id_number || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="passport_series">Серия паспорта</Label>
+                      <Input id="passport_series" placeholder="Введите серию паспорта..." value={clientFormData.passport_series || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="passport_number">Номер паспорта</Label>
+                      <Input id="passport_number" placeholder="Введите номер паспорта..." value={clientFormData.passport_number || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
+                      <Input id="passport_issue_date" type="date" value={clientFormData.passport_issue_date || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="passport_expire_date">Дата окончания паспорта</Label>
+                      <Input id="passport_expire_date" type="date" value={clientFormData.passport_expire_date || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
+                      <div className="space-y-2">
+                        {photoPreview ? (
+                          <div className="relative">
+                            <img 
+                              src={photoPreview} 
+                              alt="Preview" 
+                              className="w-32 h-40 object-cover rounded border border-gray-200"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 h-6 w-6 p-0"
+                              onClick={clearPhoto}
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                            <div className="text-center">
+                              <div className="text-gray-400 mb-2">
                               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                               </svg>
                             </div>
-                            <div className="text-sm text-gray-600">
-                              <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
-                                Выберите фото
-                              </label>
-                              {' '}
-                              или перетащите файл сюда
+                              <div className="text-sm text-gray-600">
+                                <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
+                                  Выберите фото
+                                </label>
+                                {' '}
+                                или перетащите файл сюда
+                              </div>
+                              <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
                             </div>
-                            <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
+                            <input
+                              id="photo-upload"
+                              type="file"
+                              className="hidden"
+                              accept=".jpg,.jpeg,.png"
+                              onChange={handlePhotoSelect}
+                            />
                           </div>
-                          <input
-                            id="photo-upload"
-                            type="file"
-                            className="hidden"
-                            accept=".jpg,.jpeg,.png"
-                            onChange={handlePhotoSelect}
-                          />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Contact Information */}
               <div className="space-y-4">
@@ -1246,10 +1360,12 @@ useEffect(() => {
                     <Label htmlFor="email">Email</Label>
                     <Input id="email" type="email" placeholder="Введите Email..." value={clientFormData.email || ""} onChange={handleFormChange} />
                   </div>
-                  <div>
-                    <Label htmlFor="registration_address">Адрес по прописке</Label>
-                    <Textarea id="registration_address" placeholder="Введите адрес прописки..." value={clientFormData.registration_address || ""} onChange={handleFormChange} />
-                  </div>
+                  {clientFormData.client_type === "individual" && (
+                    <div>
+                      <Label htmlFor="registration_address">Адрес прописки</Label>
+                      <Textarea id="registration_address" placeholder="Введите адрес прописки..." value={clientFormData.registration_address || ""} onChange={handleFormChange} />
+                    </div>
+                  )}
                   <div>
                     <Label htmlFor="actual_address">Адрес фактического проживания</Label>
                     <Textarea id="actual_address" placeholder="Введите адрес проживания..." value={clientFormData.actual_address || ""} onChange={handleFormChange} />
@@ -1257,95 +1373,167 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Optional Fields */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Дополнительная информация (необязательно)
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="former_maiden_name">Прежняя фамилия (девичья)</Label>
-                    <Input id="former_maiden_name" placeholder="Введите прежнюю фамилию..." value={clientFormData.former_maiden_name || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="spouse_info">Супруг(а) - ФИО и контакты</Label>
-                    <Textarea id="spouse_info" placeholder="ФИО и контакты супруга(и)..." value={clientFormData.spouse_info || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="children_info">Дети</Label>
-                    <Textarea id="children_info" placeholder="Информация о детях (имя/фамилия/год рождения)..." value={clientFormData.children_info || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="education">Образование</Label>
-                    <Input id="education" placeholder="Введите образование..." value={clientFormData.education || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="work_place_position">Место работы и должность</Label>
-                    <Input id="work_place_position" placeholder="Введите место работы и должность..." value={clientFormData.work_place_position || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="trips_visas_5years">Поездки и визы за последние 5 лет</Label>
-                    <Textarea id="trips_visas_5years" placeholder="Информация о поездках и визах..." value={clientFormData.trips_visas_5years || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="family_members_abroad">Члены семьи за рубежом</Label>
-                    <Textarea id="family_members_abroad" placeholder="Члены семьи в стране назначения..." value={clientFormData.family_members_abroad || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="authorized_person">Доверенное лицо</Label>
-                    <Textarea id="authorized_person" placeholder="ФИО и контакты доверенного лица..." value={clientFormData.authorized_person || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="height_weight">Рост / Вес</Label>
-                    <Input id="height_weight" placeholder="Рост / Вес..." value={clientFormData.height_weight || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="driving_license_categories">Права ВУ (категории)</Label>
-                    <Input id="driving_license_categories" placeholder="Категории водительских прав..." value={clientFormData.driving_license_categories || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="therapist_clinic">Терапевт / Клиника</Label>
-                    <Input id="therapist_clinic" placeholder="ФИО терапевта / Название клиники..." value={clientFormData.therapist_clinic || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="illnesses_injuries_3years">Болезни и травмы за 3 года</Label>
-                    <Textarea id="illnesses_injuries_3years" placeholder="Информация о болезнях и травмах..." value={clientFormData.illnesses_injuries_3years || ""} onChange={handleFormChange} />
-                  </div>
-                  <div className="md:col-span-2 lg:col-span-3">
-                    <Label htmlFor="additional_info">Дополнительная информация</Label>
-                    <Textarea id="additional_info" placeholder="Любая дополнительная информация..." value={clientFormData.additional_info || ""} onChange={handleFormChange} />
+              {/* Optional Fields - only for individual clients */}
+              {clientFormData.client_type === "individual" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Дополнительная информация (необязательно)
+                  </h3>
+                  <Separator />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="previous_last_name">Прежняя фамилия (девичья)</Label>
+                      <Input id="previous_last_name" placeholder="Введите прежнюю фамилию..." value={clientFormData.previous_last_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="spouse_name">Супруг(а) - ФИО</Label>
+                      <Input id="spouse_name" placeholder="ФИО супруга(и)..." value={clientFormData.spouse_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="spouse_contacts">Контакты супруга(и)</Label>
+                      <Input id="spouse_contacts" placeholder="Контакты супруга(и)..." value={clientFormData.spouse_contacts || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="has_children">Есть дети?</Label>
+                      <CustomSelect
+                        value={clientFormData.has_children ? "true" : "false"}
+                        onChange={(value) => handleBooleanChange("has_children", value)}
+                        options={[{ value: "true", label: "Да" }, { value: "false", label: "Нет" }]}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="children_list">Дети</Label>
+                      <Textarea id="children_list" placeholder="Информация о детях (имя/фамилия/год рождения)..." value={clientFormData.children_list || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="education">Образование</Label>
+                      <Input id="education" placeholder="Введите образование..." value={clientFormData.education || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="job">Место работы и должность</Label>
+                      <Input id="job" placeholder="Введите место работы и должность..." value={clientFormData.job || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="trips_last5_years">Поездки и визы за последние 5 лет</Label>
+                      <Textarea id="trips_last5_years" placeholder="Информация о поездках и визах..." value={clientFormData.trips_last5_years || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="relatives_in_destination">Члены семьи за рубежом</Label>
+                      <Textarea id="relatives_in_destination" placeholder="Информация о членах семьи за рубежом..." value={clientFormData.relatives_in_destination || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="trusted_person">Доверенное лицо</Label>
+                      <Input id="trusted_person" placeholder="Доверенное лицо..." value={clientFormData.trusted_person || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="height">Рост</Label>
+                      <Input id="height" type="number" placeholder="Рост (см)..." value={clientFormData.height || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="weight">Вес</Label>
+                      <Input id="weight" type="number" placeholder="Вес (кг)..." value={clientFormData.weight || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="driver_license_categories">Права ВУ (категории)</Label>
+                      <Input id="driver_license_categories" placeholder="Категории водительских прав..." value={clientFormData.driver_license_categories || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="therapist_name">Терапевт</Label>
+                      <Input id="therapist_name" placeholder="ФИО терапевта..." value={clientFormData.therapist_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="clinic_name">Клиника</Label>
+                      <Input id="clinic_name" placeholder="Название клиники..." value={clientFormData.clinic_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="diseases_last3_years">Заболевания / Травмы за последние 3 года</Label>
+                      <Textarea id="diseases_last3_years" placeholder="Информация о заболеваниях и травмах..." value={clientFormData.diseases_last3_years || ""} onChange={handleFormChange} />
+                    </div>
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <Label htmlFor="additional_info">Дополнительная информация</Label>
+                      <Textarea id="additional_info" placeholder="Любая дополнительная информация..." value={clientFormData.additional_info || ""} onChange={handleFormChange} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Organization Information */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <Briefcase className="h-5 w-5" />
-                  Информация об организации (для юридических лиц)
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Название организации</Label>
-                    <Input id="name" placeholder="Введите название организации..." value={clientFormData.name || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="bin_iin">БИН/ИИН организации</Label>
-                    <Input id="bin_iin" placeholder="Введите БИН/ИИН..." value={clientFormData.bin_iin || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="address">Юридический адрес</Label>
-                    <Textarea id="address" placeholder="Введите юридический адрес..." value={clientFormData.address || ""} onChange={handleFormChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="contact_info">Контактная информация (юр.)</Label>
-                    <Textarea id="contact_info" placeholder="Введите контактную информацию..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
+              {/* Organization Information - only for legal clients */}
+              {clientFormData.client_type === "legal" && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Briefcase className="h-5 w-5" />
+                    Информация об организации (для юридических лиц)
+                  </h3>
+                  <Separator />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Название организации *</Label>
+                      <Input id="name" placeholder="Введите название организации..." value={clientFormData.name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bin_iin">БИН/ИИН организации *</Label>
+                      <Input id="bin_iin" placeholder="Введите БИН/ИИН..." value={clientFormData.bin_iin || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="legal_form">Организационно-правовая форма</Label>
+                      <Input id="legal_form" placeholder="ТОО, ИП и т.д..." value={clientFormData.legal_profile?.legal_form || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="director_full_name">ФИО директора</Label>
+                      <Input id="director_full_name" placeholder="ФИО директора..." value={clientFormData.legal_profile?.director_full_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="contact_info">Контактное лицо</Label>
+                      <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="contact_person_position">Должность контактного лица</Label>
+                      <Input id="contact_person_position" placeholder="Должность..." value={clientFormData.contact_person_position || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="address">Юридический адрес</Label>
+                      <Textarea id="address" placeholder="Введите юридический адрес..." value={clientFormData.address || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="actual_address">Фактический адрес</Label>
+                      <Textarea id="actual_address" placeholder="Введите фактический адрес..." value={clientFormData.actual_address || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bank_name">Название банка</Label>
+                      <Input id="bank_name" placeholder="Название банка..." value={clientFormData.bank_name || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="iban">IBAN</Label>
+                      <Input id="iban" placeholder="IBAN..." value={clientFormData.iban || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="bik">БИК</Label>
+                      <Input id="bik" placeholder="БИК..." value={clientFormData.bik || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="kbe">КБЕ</Label>
+                      <Input id="kbe" placeholder="КБЕ..." value={clientFormData.kbe || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="tax_regime">Налоговый режим</Label>
+                      <Input id="tax_regime" placeholder="Налоговый режим..." value={clientFormData.legal_profile?.tax_regime || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="website">Веб-сайт</Label>
+                      <Input id="website" placeholder="https://..." value={clientFormData.legal_profile?.website || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="industry">Отрасль</Label>
+                      <Input id="industry" placeholder="Отрасль..." value={clientFormData.legal_profile?.industry || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
+                      <Label htmlFor="company_size">Размер компании</Label>
+                      <Input id="company_size" placeholder="Малый, средний, крупный..." value={clientFormData.legal_profile?.company_size || ""} onChange={handleFormChange} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </ScrollArea>
           <DialogFooter>
@@ -1457,7 +1645,7 @@ useEffect(() => {
                         <DetailItem label="Отчество" value={viewingClient.middle_name} />
                         <DetailItem label="Место рождения" value={viewingClient.birth_place} />
                         <DetailItem label="Гражданство" value={viewingClient.citizenship} />
-                        <DetailItem label="Пол" value={viewingClient.gender} />
+                        <DetailItem label="Пол" value={viewingClient.sex} />
                         <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
                         <DetailItem label="ИИН" value={viewingClient.iin} />
                       </div>
@@ -1479,7 +1667,7 @@ useEffect(() => {
                         <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
                         <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
                         <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
-                        <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expiry_date} />
+                        <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expire_date} />
                         <DetailItem label="Фото 3,5x4,5" value={viewingClient.photo_35x45} />
                       </div>
                     </div>
@@ -1510,43 +1698,57 @@ useEffect(() => {
                         Дополнительная информация
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
-                        <DetailItem label="Прежняя фамилия (девичья)" value={viewingClient.former_maiden_name} />
-                        <DetailItem label="Супруг(а)" value={viewingClient.spouse_info} />
-                        <DetailItem label="Дети" value={viewingClient.children_info} />
+                        <DetailItem label="Прежняя фамилия (девичья)" value={viewingClient.previous_last_name} />
+                        <DetailItem label="Супруг(а)" value={viewingClient.spouse_name} />
+                        <DetailItem label="Контакты супруга(и)" value={viewingClient.spouse_contacts} />
+                        <DetailItem label="Есть дети" value={viewingClient.has_children ? "Да" : "Нет"} />
+                        <DetailItem label="Дети" value={viewingClient.children_list} />
                         <DetailItem label="Образование" value={viewingClient.education} />
-                        <DetailItem label="Место работы и должность" value={viewingClient.work_place_position} />
-                        <DetailItem label="Поездки и визы за 5 лет" value={viewingClient.trips_visas_5years} />
-                        <DetailItem label="Члены семьи за рубежом" value={viewingClient.family_members_abroad} />
-                        <DetailItem label="Доверенное лицо" value={viewingClient.authorized_person} />
-                        <DetailItem label="Рост / Вес" value={viewingClient.height_weight} />
-                        <DetailItem label="Права ВУ (категории)" value={viewingClient.driving_license_categories} />
-                        <DetailItem label="Терапевт / Клиника" value={viewingClient.therapist_clinic} />
-                        <DetailItem label="Болезни и травмы за 3 года" value={viewingClient.illnesses_injuries_3years} />
+                        <DetailItem label="Место работы и должность" value={viewingClient.job} />
+                        <DetailItem label="Поездки и визы за 5 лет" value={viewingClient.trips_last5_years} />
+                        <DetailItem label="Члены семьи за рубежом" value={viewingClient.relatives_in_destination} />
+                        <DetailItem label="Доверенное лицо" value={viewingClient.trusted_person} />
+                        <DetailItem label="Рост" value={viewingClient.height?.toString()} />
+                        <DetailItem label="Вес" value={viewingClient.weight?.toString()} />
+                        <DetailItem label="Права ВУ" value={viewingClient.driver_license_categories} />
+                        <DetailItem label="Терапевт" value={viewingClient.therapist_name} />
+                        <DetailItem label="Клиника" value={viewingClient.clinic_name} />
+                        <DetailItem label="Заболевания / Травмы" value={viewingClient.diseases_last3_years} />
                         <DetailItem label="Дополнительная информация" value={viewingClient.additional_info} />
                       </div>
                     </div>
                     <Separator />
                   </>
                 )}
-
-                {/* Organization Information */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <Briefcase className="h-5 w-5" />
-                    Информация об организации
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Название" value={viewingClient.name} />
-                    <DetailItem label="БИН/ИИН" value={viewingClient.bin_iin} />
-                    <DetailItem label="Адрес" value={viewingClient.address} />
-                    <DetailItem label="Контактная информация" value={viewingClient.contact_info} />
-                    <DetailItem label="Должность подписанта" value={viewingClient.legal_profile?.contact_person_position || viewingClient.contact_person_position} />
-                    <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name || viewingClient.bank_name} />
-                    <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban || viewingClient.iban} />
-                    <DetailItem label="БИК" value={viewingClient.legal_profile?.bik || viewingClient.bik} />
-                    <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe || viewingClient.kbe} />
+                
+                {/* Organization Information - only for legal clients */}
+                {viewingClient.client_type === "legal" && (
+                  <div>
+                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                      <Briefcase className="h-5 w-5" />
+                      Информация об организации
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <DetailItem label="Название" value={viewingClient.name} />
+                      <DetailItem label="БИН/ИИН" value={viewingClient.bin_iin} />
+                      <DetailItem label="Организационно-правовая форма" value={viewingClient.legal_profile?.legal_form} />
+                      <DetailItem label="ФИО директора" value={viewingClient.legal_profile?.director_full_name} />
+                      <DetailItem label="Контактное лицо" value={viewingClient.contact_info} />
+                      <DetailItem label="Должность контактного лица" value={viewingClient.legal_profile?.contact_person_position || viewingClient.contact_person_position} />
+                      <DetailItem label="Юридический адрес" value={viewingClient.address} />
+                      <DetailItem label="Фактический адрес" value={viewingClient.actual_address} />
+                      <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name || viewingClient.bank_name} />
+                      <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban || viewingClient.iban} />
+                      <DetailItem label="БИК" value={viewingClient.legal_profile?.bik || viewingClient.bik} />
+                      <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe || viewingClient.kbe} />
+                      <DetailItem label="Налоговый режим" value={viewingClient.legal_profile?.tax_regime} />
+                      <DetailItem label="Веб-сайт" value={viewingClient.legal_profile?.website} />
+                      <DetailItem label="Отрасль" value={viewingClient.legal_profile?.industry} />
+                      <DetailItem label="Размер компании" value={viewingClient.legal_profile?.company_size} />
+                      <DetailItem label="Дополнительная информация" value={viewingClient.legal_profile?.additional_info} />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </ScrollArea>
           )}

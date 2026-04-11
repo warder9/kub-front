@@ -73,6 +73,7 @@ import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
 import * as dealsApi from "@/src/api/deals.api";
+import * as ClientAPI from "@/src/api/clients.api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -131,8 +132,10 @@ export default function LeadsPage() {
   const [convertLeadData, setConvertLeadData] = useState({
     client_id: "",
     amount: "",
-    currency: "USD",
+    currency: "KZT",
   });
+  const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
+  const [clientsList, setClientsList] = useState<any[]>([]);
   const [statusChangeData, setStatusChangeData] = useState({ to: "", comment: "" });
 
   const [user, setUser] = useState<any>(null);
@@ -254,7 +257,7 @@ export default function LeadsPage() {
       setUsers([]);
       return;
     }
-    
+
     try {
       const { listUsers } = await import("@/src/api/users.api");
       const res = await listUsers();
@@ -270,6 +273,21 @@ export default function LeadsPage() {
     }
   };
 
+  const fetchClients = async () => {
+    try {
+      const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+      const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
+      const res = await fetchFn({ page: 1, size: 100 });
+      const data = Array.isArray(res) ? res : (res as any)?.data || [];
+      setClientsList(data);
+    } catch (err: any) {
+      console.error("Error loading clients:", err);
+      if (err?.response?.status === 403) {
+        setClientsList([]);
+      }
+    }
+  };
+
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams(searchParams);
     params.set('page', page.toString());
@@ -279,6 +297,7 @@ export default function LeadsPage() {
   useEffect(() => {
     if (user) {
       fetchUsers();
+      fetchClients();
     }
   }, [user]);
 
@@ -419,8 +438,15 @@ export default function LeadsPage() {
     try {
       await leadsApi.delete_lead(undefined, { id: leadId });
       setLeads((prev) => (prev || []).filter((l) => l.id !== leadId));
-    } catch (err) {
+      alert('Лид успешно удален');
+    } catch (err: any) {
       console.error("Ошибка удаления лида:", err);
+      const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error';
+      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || err?.response?.status === 500) {
+        alert('Невозможно удалить лид. Возможно, он уже конвертирован в сделку или имеет связанные записи. Проверьте статус лида.');
+      } else {
+        alert(`Ошибка удаления лида: ${errorMsg}`);
+      }
     }
   };
 
@@ -439,19 +465,52 @@ export default function LeadsPage() {
   const handleConvertLead = async () => {
     if (!selectedLead) return;
     try {
+      const clientId = Number(convertLeadData.client_id);
+      if (!clientId) {
+        alert('Пожалуйста, введите ID клиента');
+        return;
+      }
+
+      // Fetch client to get client_type
+      let clientType = "individual"; // default
+      try {
+        const clientRes = await ClientAPI.getClientById(clientId.toString());
+        clientType = clientRes?.client_type || "individual";
+      } catch (err) {
+        console.error("Error fetching client:", err);
+        // Continue with default if fetch fails
+      }
+
       const dealPayload = {
-        ...convertLeadData,
         lead_id: selectedLead.id,
         owner_id: selectedLead.owner_id,
-        client_id: Number(convertLeadData.client_id),
-        amount: Number(convertLeadData.amount),
+        client_id: clientId,
+        client_type: clientType,
+        amount: Number(convertLeadData.amount) || 0,
+        currency: convertLeadData.currency || "KZT",
         status: 'new',
       };
       await dealsApi.create_deal(dealPayload);
-      await leadsApi.delete_lead(undefined, { id: selectedLead.id });
+      
+      // Try to delete the lead, but don't fail if it doesn't work
+      let leadDeleted = false;
+      try {
+        await leadsApi.delete_lead(undefined, { id: selectedLead.id });
+        leadDeleted = true;
+      } catch (deleteErr: any) {
+        console.warn("Failed to delete lead after conversion:", deleteErr);
+        // Continue anyway - the deal was created successfully
+      }
+      
       fetchLeads();
-    } catch (err) {
+      if (leadDeleted) {
+        alert('Лид успешно конвертирован в сделку!');
+      } else {
+        alert('Сделка создана успешно! (Лид не был удален, но это не влияет на результат)');
+      }
+    } catch (err: any) {
       console.error("Ошибка конвертации лида:", err);
+      alert(`Ошибка конвертации: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
     } finally {
       setIsConvertDialogOpen(false);
     }
@@ -486,8 +545,9 @@ export default function LeadsPage() {
     setConvertLeadData({
       client_id: "",
       amount: "",
-      currency: "USD",
+      currency: "KZT",
     });
+    setIsClientSelectOpen(false);
     setIsConvertDialogOpen(true);
   };
 
@@ -744,7 +804,13 @@ export default function LeadsPage() {
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" title="Удалить">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Удалить"
+                                disabled={lead.status === 'cancelled'}
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -870,8 +936,51 @@ export default function LeadsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="client-id">ID Клиента</Label>
-              <Input id="client-id" placeholder="Введите ID клиента..." value={convertLeadData.client_id} onChange={(e) => setConvertLeadData({ ...convertLeadData, client_id: e.target.value })} />
+              <Label htmlFor="client-id">Клиент</Label>
+              <div className="flex w-full items-center space-x-2">
+                <Input
+                  id="client-id"
+                  type="number"
+                  placeholder="ID клиента"
+                  value={convertLeadData.client_id}
+                  onChange={(e) => setConvertLeadData({ ...convertLeadData, client_id: e.target.value })}
+                  className="flex-1"
+                />
+                <Popover open={isClientSelectOpen} onOpenChange={setIsClientSelectOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <Users className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="end">
+                    <Command>
+                      <CommandInput placeholder="Поиск клиента..." />
+                      <CommandList>
+                        <CommandEmpty>Клиент не найден.</CommandEmpty>
+                        <CommandGroup>
+                          {clientsList.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={`${c.first_name || ""} ${c.last_name || ""} ${c.legal_profile?.company_name || ""} ${c.id}`}
+                              onSelect={() => {
+                                setConvertLeadData({ ...convertLeadData, client_id: c.id.toString() });
+                                setIsClientSelectOpen(false);
+                              }}
+                            >
+                              <span>
+                                {c.first_name
+                                  ? `${c.first_name} ${c.last_name || ""}`
+                                  : (c.legal_profile?.company_name || c.name || `Client ${c.id}`)}
+                              </span>
+                              <span className="ml-auto text-xs text-gray-400">ID: {c.id}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="amount">Сумма</Label>
@@ -879,7 +988,18 @@ export default function LeadsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="currency">Валюта</Label>
-              <Input id="currency" placeholder="Введите валюту..." value={convertLeadData.currency} onChange={(e) => setConvertLeadData({ ...convertLeadData, currency: e.target.value })} />
+              <CustomSelect
+                value={convertLeadData.currency}
+                onChange={(value) => setConvertLeadData({ ...convertLeadData, currency: value })}
+                placeholder="Выберите валюту"
+                options={[
+                  { value: "KZT", label: "KZT - Тенге" },
+                  { value: "USD", label: "USD - Доллар США" },
+                  { value: "EUR", label: "EUR - Евро" },
+                  { value: "RUB", label: "RUB - Рубль" },
+                  { value: "CNY", label: "CNY - Юань" },
+                ]}
+              />
             </div>
           </div>
           <div className="flex justify-end space-x-2 mt-4">
