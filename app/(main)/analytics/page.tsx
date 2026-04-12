@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LoadingState } from '@/components/ui/loading';
 import { ErrorState } from '@/components/ui/error-state';
-import { Calendar, Download, TrendingUp, Users, Target, DollarSign, ArrowUpRight, ArrowDownRight, Minus, Award, Building2, Phone, Mail, Globe } from 'lucide-react';
+import { Calendar, TrendingUp, Users, Target, DollarSign, ArrowUpRight, ArrowDownRight, Minus, Award, Building2, Phone, Mail, Globe } from 'lucide-react';
 import * as ReportsAPI from '@/src/api/reports.api';
 import type * as Models from '@/src/models/reports.model';
 
@@ -297,26 +297,6 @@ export default function AnalyticsPage() {
     fetchData();
   }, [dateRange, period]);
 
-  const handleExport = async () => {
-    try {
-      const blob = await ReportsAPI.revenue_export_file({
-        from: dateRange.from,
-        to: dateRange.to,
-        period,
-      });
-      
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `revenue-export-${dateRange.from}-${dateRange.to}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Failed to export data:', error);
-    }
-  };
 
   if (loading) {
     return (
@@ -386,10 +366,6 @@ export default function AnalyticsPage() {
           </select>
           <Button onClick={fetchData} variant="outline" size="sm">
             Обновить
-          </Button>
-          <Button onClick={handleExport} size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Экспорт
           </Button>
         </div>
       </div>
