@@ -435,22 +435,24 @@ export function RoleBasedSidebar() {
       {/* User Info */}
       {!isCollapsed && (
         <div className="p-4 border-b border-slate-200/60">
-          <div className="flex items-center space-x-3 mb-3">
-            <div className="w-10 h-10 gradient-primary rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
-              {user.company_name[0]}
+          <Link href="/profile" className="block">
+            <div className="flex items-center space-x-3 mb-3 hover:bg-slate-50 rounded-lg p-2 transition-all duration-200 cursor-pointer">
+              <div className="w-10 h-10 gradient-primary rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
+                {user.company_name[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900 truncate">
+                  {user?.company_name}
+                </p>
+                <p className="text-xs text-slate-500 truncate">
+                  {user?.email}
+                </p>
+                <p className="text-xs font-semibold text-blue-600 truncate mt-0.5">
+                  {displayRole}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 truncate">
-                {user?.company_name}
-              </p>
-              <p className="text-xs text-slate-500 truncate">
-                {user?.email}
-              </p>
-              <p className="text-xs font-semibold text-blue-600 truncate mt-0.5">
-                {displayRole}
-              </p>
-            </div>
-          </div>
+          </Link>
         </div>
       )}
 

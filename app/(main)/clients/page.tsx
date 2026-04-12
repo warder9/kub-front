@@ -553,6 +553,29 @@ useEffect(() => {
       bik: client.legal_profile?.bik || client.bik || "",
       kbe: client.legal_profile?.kbe || client.kbe || "",
 
+      // Legal profile nested fields
+      legal_profile: {
+        company_name: client.legal_profile?.company_name || client.name || "",
+        bin: client.legal_profile?.bin || client.bin_iin || "",
+        legal_form: client.legal_profile?.legal_form || "",
+        director_full_name: client.legal_profile?.director_full_name || "",
+        contact_person_name: client.legal_profile?.contact_person_name || client.contact_info || "",
+        contact_person_position: client.legal_profile?.contact_person_position || client.contact_person_position || "",
+        contact_person_phone: client.legal_profile?.contact_person_phone || client.phone || "",
+        contact_person_email: client.legal_profile?.contact_person_email || client.email || "",
+        legal_address: client.legal_profile?.legal_address || client.address || "",
+        actual_address: client.legal_profile?.actual_address || client.actual_address || "",
+        bank_name: client.legal_profile?.bank_name || client.bank_name || "",
+        iban: client.legal_profile?.iban || client.iban || "",
+        bik: client.legal_profile?.bik || client.bik || "",
+        kbe: client.legal_profile?.kbe || client.kbe || "",
+        tax_regime: client.legal_profile?.tax_regime || "",
+        website: client.legal_profile?.website || "",
+        industry: client.legal_profile?.industry || "",
+        company_size: client.legal_profile?.company_size || "",
+        additional_info: client.legal_profile?.additional_info || "",
+      },
+
       // Required fields (RED)
       country: client.country || "",
       trip_purpose: client.trip_purpose || "",
@@ -560,7 +583,7 @@ useEffect(() => {
       first_name: client.first_name || "",
       birth_date: client.birth_date || "",
       phone: client.phone || "",
-      
+
       // Additional required fields
       middle_name: client.middle_name || "",
       birth_place: client.birth_place || "",
@@ -577,7 +600,7 @@ useEffect(() => {
       actual_address: client.actual_address || "",
       email: client.email || "",
       photo_35x45: client.photo_35x45 || "",
-      
+
       // Optional fields
       previous_last_name: client.previous_last_name || "",
       spouse_name: client.spouse_name || "",
