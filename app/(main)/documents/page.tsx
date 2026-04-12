@@ -222,6 +222,46 @@ function getExtraDefaults(docType: string): Record<string, any> {
     }
 }
 
+// Russian labels for extra fields
+function getFieldLabel(key: string): string {
+    const labels: Record<string, string> = {
+        CONTRACT_NUMBER: "Номер договора",
+        CONTRACT_DATE_TEXT: "Дата договора",
+        PREPAY_AMOUNT_NUM: "Сумма предоплаты (цифрами)",
+        PREPAY_AMOUNT_TEXT: "Сумма предоплаты (текстом)",
+        reason_code: "Код причины",
+        REFUND_REASON_TEXT: "Причина возврата",
+        REFUND_AMOUNT_NUM: "Сумма возврата (цифрами)",
+        REFUND_AMOUNT_TEXT: "Сумма возврата (текстом)",
+        PAUSE_REASON_TEXT: "Причина паузы",
+        PAUSE_FROM_DATE: "Дата начала паузы",
+        PAUSE_TO_DATE: "Дата окончания паузы",
+        REFUND_DATE: "Дата возврата",
+        CANCEL_DATE: "Дата отмены",
+        DOCS_PRESENT: "Передаваемые документы",
+        HANDOVER_DATE: "Дата передачи",
+        TERMINATION_DATE: "Дата расторжения",
+        ADDENDUM_NUMBER: "Номер доп. соглашения",
+        ADDENDUM_DATE: "Дата доп. соглашения",
+    }
+    return labels[key] || key
+}
+
+// Check if a field is a date field
+function isDateField(key: string): boolean {
+    const dateFields = [
+        "CONTRACT_DATE_TEXT",
+        "PAUSE_FROM_DATE",
+        "PAUSE_TO_DATE",
+        "REFUND_DATE",
+        "CANCEL_DATE",
+        "HANDOVER_DATE",
+        "TERMINATION_DATE",
+        "ADDENDUM_DATE",
+    ]
+    return dateFields.includes(key)
+}
+
 // ─── Combobox Component ──────────────────────────────────────────
 
 function ComboboxSelect({
@@ -1274,17 +1314,25 @@ export default function DocumentsPage() {
                         {Object.keys(createForm.extra).length > 0 && (
                             <div className="md:col-span-2 border-t pt-4 mt-2">
                                 <Label className="text-sm font-semibold text-gray-700 mb-3 block">
-                                    Дополнительные поля для шаблона
+                                    Дополнительные поля
                                 </Label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {Object.entries(createForm.extra).map(([key, val]) => (
                                         <div key={key} className="space-y-1">
-                                            <Label className="text-xs text-gray-500">{key}</Label>
-                                            <Input
-                                                value={val || ""}
-                                                onChange={(e) => handleExtraChange(key, e.target.value)}
-                                                placeholder={`Введите ${key}...`}
-                                            />
+                                            <Label className="text-xs text-gray-500">{getFieldLabel(key)}</Label>
+                                            {isDateField(key) ? (
+                                                <Input
+                                                    type="date"
+                                                    value={val || ""}
+                                                    onChange={(e) => handleExtraChange(key, e.target.value)}
+                                                />
+                                            ) : (
+                                                <Input
+                                                    value={val || ""}
+                                                    onChange={(e) => handleExtraChange(key, e.target.value)}
+                                                    placeholder={getFieldLabel(key)}
+                                                />
+                                            )}
                                         </div>
                                     ))}
                                 </div>
