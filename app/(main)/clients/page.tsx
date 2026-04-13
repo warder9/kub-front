@@ -102,15 +102,9 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     legal_form: "",
     director_full_name: "",
     contact_person_name: "",
-    contact_person_position: "",
     contact_person_phone: "",
     contact_person_email: "",
     legal_address: "",
-    actual_address: "",
-    bank_name: "",
-    iban: "",
-    bik: "",
-    kbe: "",
     tax_regime: "",
     website: "",
     industry: "",
@@ -198,6 +192,22 @@ export default function ClientsPage() {
           iban: "",
           bik: "",
           kbe: "",
+          legal_profile: {
+            ...prev.legal_profile,
+            company_name: "",
+            bin: "",
+            legal_form: "",
+            director_full_name: "",
+            contact_person_name: "",
+            contact_person_phone: "",
+            contact_person_email: "",
+            legal_address: "",
+            tax_regime: "",
+            website: "",
+            industry: "",
+            company_size: "",
+            additional_info: "",
+          },
         }));
       }
     }
@@ -546,12 +556,12 @@ useEffect(() => {
       contact_info: client.contact_info || "",
       client_type: client.client_type || "individual",
 
-      // Legal entity banking fields - read from legal_profile if available
-      contact_person_position: client.legal_profile?.contact_person_position || client.contact_person_position || "",
-      bank_name: client.legal_profile?.bank_name || client.bank_name || "",
-      iban: client.legal_profile?.iban || client.iban || "",
-      bik: client.legal_profile?.bik || client.bik || "",
-      kbe: client.legal_profile?.kbe || client.kbe || "",
+      // Legal entity banking fields (main table)
+      contact_person_position: client.contact_person_position || "",
+      bank_name: client.bank_name || "",
+      iban: client.iban || "",
+      bik: client.bik || "",
+      kbe: client.kbe || "",
 
       // Legal profile nested fields
       legal_profile: {
@@ -560,15 +570,9 @@ useEffect(() => {
         legal_form: client.legal_profile?.legal_form || "",
         director_full_name: client.legal_profile?.director_full_name || "",
         contact_person_name: client.legal_profile?.contact_person_name || client.contact_info || "",
-        contact_person_position: client.legal_profile?.contact_person_position || client.contact_person_position || "",
         contact_person_phone: client.legal_profile?.contact_person_phone || client.phone || "",
         contact_person_email: client.legal_profile?.contact_person_email || client.email || "",
         legal_address: client.legal_profile?.legal_address || client.address || "",
-        actual_address: client.legal_profile?.actual_address || client.actual_address || "",
-        bank_name: client.legal_profile?.bank_name || client.bank_name || "",
-        iban: client.legal_profile?.iban || client.iban || "",
-        bik: client.legal_profile?.bik || client.bik || "",
-        kbe: client.legal_profile?.kbe || client.kbe || "",
         tax_regime: client.legal_profile?.tax_regime || "",
         website: client.legal_profile?.website || "",
         industry: client.legal_profile?.industry || "",
@@ -788,15 +792,9 @@ useEffect(() => {
         legal_form: clientFormData.legal_profile?.legal_form || "",
         director_full_name: clientFormData.legal_profile?.director_full_name || "",
         contact_person_name: clientFormData.contact_info || "",
-        contact_person_position: clientFormData.contact_person_position || "",
         contact_person_phone: clientFormData.phone || "",
         contact_person_email: clientFormData.email || "",
         legal_address: clientFormData.address || "",
-        actual_address: clientFormData.actual_address || "",
-        bank_name: clientFormData.bank_name || "",
-        iban: clientFormData.iban || "",
-        bik: clientFormData.bik || "",
-        kbe: clientFormData.kbe || "",
         tax_regime: clientFormData.legal_profile?.tax_regime || "",
         website: clientFormData.legal_profile?.website || "",
         industry: clientFormData.legal_profile?.industry || "",
@@ -1371,31 +1369,6 @@ useEffect(() => {
                 </div>
               )}
 
-              {/* Contact Information */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Контактная информация
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="Введите Email..." value={clientFormData.email || ""} onChange={handleFormChange} />
-                  </div>
-                  {clientFormData.client_type === "individual" && (
-                    <div>
-                      <Label htmlFor="registration_address">Адрес прописки</Label>
-                      <Textarea id="registration_address" placeholder="Введите адрес прописки..." value={clientFormData.registration_address || ""} onChange={handleFormChange} />
-                    </div>
-                  )}
-                  <div>
-                    <Label htmlFor="actual_address">Адрес фактического проживания</Label>
-                    <Textarea id="actual_address" placeholder="Введите адрес проживания..." value={clientFormData.actual_address || ""} onChange={handleFormChange} />
-                  </div>
-                </div>
-              </div>
-
               {/* Optional Fields - only for individual clients */}
               {clientFormData.client_type === "individual" && (
                 <div className="space-y-4">
@@ -1476,83 +1449,6 @@ useEffect(() => {
                     <div className="md:col-span-2 lg:col-span-3">
                       <Label htmlFor="additional_info">Дополнительная информация</Label>
                       <Textarea id="additional_info" placeholder="Любая дополнительная информация..." value={clientFormData.additional_info || ""} onChange={handleFormChange} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Organization Information - only for legal clients */}
-              {clientFormData.client_type === "legal" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <Briefcase className="h-5 w-5" />
-                    Информация об организации (для юридических лиц)
-                  </h3>
-                  <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Название организации *</Label>
-                      <Input id="name" placeholder="Введите название организации..." value={clientFormData.name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="bin_iin">БИН/ИИН организации *</Label>
-                      <Input id="bin_iin" placeholder="Введите БИН/ИИН..." value={clientFormData.bin_iin || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="legal_form">Организационно-правовая форма</Label>
-                      <Input id="legal_form" placeholder="ТОО, ИП и т.д..." value={clientFormData.legal_profile?.legal_form || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="director_full_name">ФИО директора</Label>
-                      <Input id="director_full_name" placeholder="ФИО директора..." value={clientFormData.legal_profile?.director_full_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="contact_info">Контактное лицо</Label>
-                      <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="contact_person_position">Должность контактного лица</Label>
-                      <Input id="contact_person_position" placeholder="Должность..." value={clientFormData.contact_person_position || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="address">Юридический адрес</Label>
-                      <Textarea id="address" placeholder="Введите юридический адрес..." value={clientFormData.address || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="actual_address">Фактический адрес</Label>
-                      <Textarea id="actual_address" placeholder="Введите фактический адрес..." value={clientFormData.actual_address || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="bank_name">Название банка</Label>
-                      <Input id="bank_name" placeholder="Название банка..." value={clientFormData.bank_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="iban">IBAN</Label>
-                      <Input id="iban" placeholder="IBAN..." value={clientFormData.iban || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="bik">БИК</Label>
-                      <Input id="bik" placeholder="БИК..." value={clientFormData.bik || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="kbe">КБЕ</Label>
-                      <Input id="kbe" placeholder="КБЕ..." value={clientFormData.kbe || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="tax_regime">Налоговый режим</Label>
-                      <Input id="tax_regime" placeholder="Налоговый режим..." value={clientFormData.legal_profile?.tax_regime || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="website">Веб-сайт</Label>
-                      <Input id="website" placeholder="https://..." value={clientFormData.legal_profile?.website || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="industry">Отрасль</Label>
-                      <Input id="industry" placeholder="Отрасль..." value={clientFormData.legal_profile?.industry || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="company_size">Размер компании</Label>
-                      <Input id="company_size" placeholder="Малый, средний, крупный..." value={clientFormData.legal_profile?.company_size || ""} onChange={handleFormChange} />
                     </div>
                   </div>
                 </div>
@@ -1757,13 +1653,13 @@ useEffect(() => {
                       <DetailItem label="Организационно-правовая форма" value={viewingClient.legal_profile?.legal_form} />
                       <DetailItem label="ФИО директора" value={viewingClient.legal_profile?.director_full_name} />
                       <DetailItem label="Контактное лицо" value={viewingClient.contact_info} />
-                      <DetailItem label="Должность контактного лица" value={viewingClient.legal_profile?.contact_person_position || viewingClient.contact_person_position} />
+                      <DetailItem label="Должность контактного лица" value={viewingClient.contact_person_position} />
                       <DetailItem label="Юридический адрес" value={viewingClient.address} />
                       <DetailItem label="Фактический адрес" value={viewingClient.actual_address} />
-                      <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name || viewingClient.bank_name} />
-                      <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban || viewingClient.iban} />
-                      <DetailItem label="БИК" value={viewingClient.legal_profile?.bik || viewingClient.bik} />
-                      <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe || viewingClient.kbe} />
+                      <DetailItem label="Название банка" value={viewingClient.bank_name} />
+                      <DetailItem label="IBAN" value={viewingClient.iban} />
+                      <DetailItem label="БИК" value={viewingClient.bik} />
+                      <DetailItem label="КБЕ" value={viewingClient.kbe} />
                       <DetailItem label="Налоговый режим" value={viewingClient.legal_profile?.tax_regime} />
                       <DetailItem label="Веб-сайт" value={viewingClient.legal_profile?.website} />
                       <DetailItem label="Отрасль" value={viewingClient.legal_profile?.industry} />

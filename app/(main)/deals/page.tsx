@@ -1264,13 +1264,18 @@ export default function DealsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="client_type">Тип клиента</Label>
-              <Input
-                id="client_type"
-                value={newDeal.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
-                disabled
-                className="bg-muted"
+              <CustomSelect
+                value={newDeal.client_type}
+                onChange={(value) =>
+                  setNewDeal({ ...newDeal, client_type: value })
+                }
+                placeholder="Выберите тип клиента"
+                options={[
+                  { value: "individual", label: "Физическое лицо" },
+                  { value: "legal", label: "Юридическое лицо" },
+                ]}
               />
-              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически</p>
+              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически при выборе клиента, но можно изменить вручную</p>
             </div>
 
             <div className="space-y-2">
@@ -1405,13 +1410,18 @@ export default function DealsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="edit_client_type">Тип клиента</Label>
-              <Input
-                id="edit_client_type"
-                value={editDeal.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
-                disabled
-                className="bg-muted"
+              <CustomSelect
+                value={editDeal.client_type}
+                onChange={(value) =>
+                  setEditDeal({ ...editDeal, client_type: value })
+                }
+                placeholder="Выберите тип клиента"
+                options={[
+                  { value: "individual", label: "Физическое лицо" },
+                  { value: "legal", label: "Юридическое лицо" },
+                ]}
               />
-              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически</p>
+              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически при выборе клиента, но можно изменить вручную</p>
             </div>
 
             <div className="space-y-2">
