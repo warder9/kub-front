@@ -322,7 +322,7 @@ export default function TasksPage() {
     setIsLoading(true)
     try {
       const params: any = { page: currentPage, size: limit }
-      if (searchTerm) params.search = searchTerm
+      if (searchTerm) params.q = searchTerm
       if (statusFilter !== "all") params.status = statusFilter
       if (archiveFilter !== "active") params.archive = archiveFilter
 
@@ -337,10 +337,19 @@ export default function TasksPage() {
         params
       });
 
-      const res = await list_tasks(undefined, params);
+      const res = await list_tasks(undefined, params)
+      let data = Array.isArray(res) ? res : (res as any)?.data || []
+      let total = (res as any)?.total || data.length
 
-      let data = res?.data || (Array.isArray(res) ? res : [])
-      let total = res?.total || data.length
+      // Client-side filtering as fallback if backend doesn't support search
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        data = data.filter((task: any) =>
+          task.title?.toLowerCase().includes(term) ||
+          task.description?.toLowerCase().includes(term)
+        )
+        total = data.length
+      }
 
       // Client-side filtering as fallback if backend doesn't support status filter
       if (statusFilter !== "all") {
@@ -716,7 +725,16 @@ export default function TasksPage() {
     if (currentUser) {
       fetchTasks();
     }
-  }, [currentPage, statusFilter, archiveFilter, currentUser]);
+  }, [currentPage, statusFilter, archiveFilter, currentUser])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (currentUser) {
+        fetchTasks()
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm, archiveFilter, currentUser])
 
   // ─── Skeleton Loading ────────────────────────────────────────
 
@@ -877,10 +895,10 @@ export default function TasksPage() {
                     const taskPriority = (task.priority || "normal") as TaskPriority
                     const allowedTransitions = statusTransitions[taskStatus] || []
                     const isFinal = taskStatus === "done" || taskStatus === "cancelled"
-                    const isArchived = task.archived || (archiveFilter === "archived")
+                    const isArchived = task.archived || task.is_archived
 
                     return (
-                      <TableRow key={task.id}>
+                      <TableRow key={task.id} className={isArchived ? "bg-gray-200" : ""}>
                         <TableCell className="font-medium max-w-[200px] truncate">
                           {task.title}
                         </TableCell>

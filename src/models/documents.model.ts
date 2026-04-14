@@ -22,6 +22,7 @@ export type SignStatus = "pending" | "approved" | "expired";
 export interface Document {
   id: number;
   archived?: boolean | null;
+  is_archived?: boolean;
   deal_id: number;
   client_id?: number;
   doc_type: DocType;

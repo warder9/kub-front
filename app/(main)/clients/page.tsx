@@ -465,7 +465,7 @@ export default function ClientsPage() {
     setError("");
     try {
       const params: any = { page: currentPage, size: limit };
-      if (searchTerm) params.search = searchTerm;
+      if (searchTerm) params.q = searchTerm;
       if (clientTypeFilter) params.client_type = clientTypeFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
 
@@ -557,8 +557,21 @@ export default function ClientsPage() {
       console.log('API response:', res);
       console.log('Response type:', Array.isArray(res) ? 'array' : 'object');
 
-      const data = Array.isArray(res) ? res : (res as any)?.data || [];
-      const total = (res as any)?.total || data.length;
+      let data = Array.isArray(res) ? res : (res as any)?.data || [];
+      let total = (res as any)?.total || data.length;
+
+      // Client-side filtering as fallback if backend doesn't support search
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        data = data.filter((client: any) =>
+          client.name?.toLowerCase().includes(term) ||
+          client.first_name?.toLowerCase().includes(term) ||
+          client.last_name?.toLowerCase().includes(term) ||
+          client.email?.toLowerCase().includes(term) ||
+          client.phone?.toLowerCase().includes(term)
+        );
+        total = data.length;
+      }
 
       console.log('Processed data:', {
         dataLength: data.length,
@@ -1331,9 +1344,9 @@ useEffect(() => {
                   </TableRow>
                 ) : (
                   clients.map((client) => {
-                    const isArchived = client.archived || (archiveFilter === "archived");
+                    const isArchived = client.archived || client.is_archived;
                     return (
-                      <TableRow key={client.id}>
+                      <TableRow key={client.id} className={isArchived ? "bg-gray-200" : ""}>
                         <TableCell className="font-medium">
                           {client.name ||
                             `${client.last_name} ${client.first_name}`}

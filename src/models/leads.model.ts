@@ -34,6 +34,7 @@ export type Leads_Update_lead_status_Request = {
 export interface Lead {
   id: number
   archived?: boolean | null
+  is_archived?: boolean
   title: string
   description: string
   owner_id: number

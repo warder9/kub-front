@@ -36,6 +36,7 @@ export type Tasks_Assign_task_Request = {
 export interface Task {
   id: number
   archived?: boolean | null
+  is_archived?: boolean
   title: string
   description: string
   entity_id: number

@@ -27,6 +27,7 @@ export type Deals_Update_deal_status_Request = {
 export interface Deal {
   id: number
   archived?: boolean | null
+  is_archived?: boolean
   lead_id?: number
   client_id?: number
   client_type?: string

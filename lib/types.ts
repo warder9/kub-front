@@ -1,6 +1,7 @@
 export interface Lead {
   id: number;
   archived?: boolean | null;
+  is_archived?: boolean;
   title: string;
   description: string;
   created_at: string;
@@ -10,6 +11,8 @@ export interface Lead {
 
 export interface Deal {
   id: string
+  archived?: boolean | null
+  is_archived?: boolean
   leadId?: string
   title: string
   description: string

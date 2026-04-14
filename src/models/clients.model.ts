@@ -2,6 +2,7 @@ export interface Client {
   id: string;
   client_type?: string | null;
   archived?: boolean | null;
+  is_archived?: boolean;
   // Common fields
   name?: string | null;
   bin_iin?: string | null;

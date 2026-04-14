@@ -220,7 +220,7 @@ export default function DealsPage() {
     try {
       const { list_deals, list_my_deals } = await import("@/src/api/deals.api");
       const params: any = { page: currentPage, size: limit };
-      if (searchTerm) params.search = searchTerm;
+      if (searchTerm) params.q = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
 
@@ -251,25 +251,30 @@ export default function DealsPage() {
       // Use effectiveView as finalView (no extra safeguard needed)
       const finalView = effectiveView;
 
-      const dealsRes = finalView === "all"
+      const res = finalView === "all"
         ? await list_deals(undefined, params)
         : await list_my_deals(undefined, params);
+      let data = (res?.data || (Array.isArray(res) ? res : []));
+      let total = res?.total || data.length;
 
-      let dealsData = (dealsRes?.data || (Array.isArray(dealsRes) ? dealsRes : []));
-      let total = dealsRes?.total || dealsData.length;
+      // Client-side filtering as fallback if backend doesn't support search
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        data = data.filter((deal: any) =>
+          deal.amount?.toString().includes(term) ||
+          getClientName(deal.client_id).toLowerCase().includes(term) ||
+          getLeadTitle(deal.lead_id).toLowerCase().includes(term)
+        );
+        total = data.length;
+      }
 
       // Client-side filtering as fallback if backend doesn't support status filter
       if (statusFilter !== "all") {
-        const filteredData = dealsData.filter((deal: any) => deal.status === statusFilter);
-        // Only use filtered count if backend didn't filter
-        if (filteredData.length !== dealsData.length) {
-          console.log('Backend did not filter by status, applying client-side filter');
-          dealsData = filteredData;
-          total = filteredData.length;
-        }
+        data = data.filter((deal: any) => deal.status === statusFilter);
+        total = data.length;
       }
 
-      setDeals(dealsData);
+      setDeals(data);
       setTotalDeals(total);
     } catch (err: any) {
       console.error("Error loading deals:", err);
@@ -933,16 +938,6 @@ export default function DealsPage() {
     return lead ? lead.title : `Лид #${leadId}`;
   };
 
-  // Filtered deals (search only, status is filtered in fetchDeals)
-  const filteredDeals = (deals || []).filter((deal) => {
-    const matchesSearch =
-      (deal.amount?.toString() || "").includes(searchTerm) ||
-      getClientName(deal.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getLeadTitle(deal.lead_id).toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
-  // Calculate statistics
   // Calculate statistics
   const stats = {
     total: totalDeals,
@@ -1132,9 +1127,9 @@ export default function DealsPage() {
                   </TableRow>
                 ) : (
                   deals.map((deal) => {
-                    const isArchived = deal.archived || (archiveFilter === "archived");
+                    const isArchived = deal.archived || deal.is_archived;
                     return (
-                      <TableRow key={deal.id}>
+                      <TableRow key={deal.id} className={isArchived ? "bg-gray-200" : ""}>
                         <TableCell className="font-medium">#{deal.id}</TableCell>
                         <TableCell>
                           {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}

@@ -221,26 +221,29 @@ export default function LeadsPage() {
       const shouldUseMyView = view === "my" || userRole === 'sales';
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, size: limit };
-      if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
 
-      console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads', 'userRole:', userRole, 'shouldUseMyView:', shouldUseMyView);
       const res = await fetchFn(undefined, params);
       let data = (res?.data || (Array.isArray(res) ? res : []));
       let total = res?.total || data.length;
 
-      console.log('API response:', { data: data.slice(0, 3), total: total, dataLength: data.length });
+      // Client-side filtering as fallback if backend doesn't support search
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const filteredData = data.filter((lead: Lead) =>
+          lead.title?.toLowerCase().includes(term) ||
+          lead.description?.toLowerCase().includes(term)
+        );
+        data = filteredData;
+        total = filteredData.length;
+      }
 
       // Client-side filtering as fallback if backend doesn't support status filter
       if (statusFilter !== "all") {
         const filteredData = data.filter((lead: Lead) => lead.status === statusFilter);
-        // Only use filtered count if backend didn't filter
-        if (filteredData.length !== data.length) {
-          console.log('Backend did not filter by status, applying client-side filter');
-          data = filteredData;
-          total = filteredData.length;
-        }
+        data = filteredData;
+        total = filteredData.length;
       }
 
       setLeads(data);
@@ -811,9 +814,9 @@ export default function LeadsPage() {
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Лиды не найдены</TableCell></TableRow>
                 ) : (
                   leads.map((lead) => {
-                    const isArchived = lead.archived || (archiveFilter === "archived");
+                    const isArchived = lead.archived || lead.is_archived;
                     return (
-                      <TableRow key={lead.id}>
+                      <TableRow key={lead.id} className={isArchived ? "bg-gray-200" : ""}>
                         <TableCell className="font-medium">{lead.title}</TableCell>
                         <TableCell>{lead.description}</TableCell>
                         <TableCell>
@@ -854,7 +857,7 @@ export default function LeadsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => openConvertDialog(lead)}
-                              disabled={lead.status === 'converted' || lead.status === 'cancelled' || isArchived}
+                              disabled={lead.status === 'converted' || lead.status === 'cancelled' || !!isArchived}
                               title="Конвертировать"
                             >
                               <ChevronsRight className="h-4 w-4" />

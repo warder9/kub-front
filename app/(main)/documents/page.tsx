@@ -487,30 +487,39 @@ export default function DocumentsPage() {
                 if (selectedDealId) {
                     // Fetch documents for the selected deal
                     const params: any = { page: currentPage, size: size }
-                    if (searchTerm) params.search = searchTerm
+                    if (searchTerm) params.q = searchTerm
 
                     const res = await getDocumentsByDeal(selectedDealId, params)
                     let data = Array.isArray(res) ? res : (res as any)?.data || []
                     const total = (res as any)?.total || data.length
 
+                    // Client-side filtering as fallback if backend doesn't support search
+                    if (searchTerm) {
+                        const term = searchTerm.toLowerCase()
+                        data = data.filter((doc: any) =>
+                            doc.doc_type?.toLowerCase().includes(term) ||
+                            doc.id?.toString().includes(term)
+                        )
+                    }
+
                     // Filter by archive status on frontend
                     if (archiveFilter !== "active") {
                         if (archiveFilter === "archived") {
-                            data = data.filter((doc: any) => doc.archived)
+                            data = data.filter((doc: any) => doc.is_archived)
                         } else {
-                            data = data.filter((doc: any) => !doc.archived)
+                            data = data.filter((doc: any) => !doc.is_archived)
                         }
                     }
 
                     setDocuments(data)
-                    setTotalDocuments(total)
+                    setTotalDocuments(data.length)
                 } else {
                     // Sales user without selected deal - fetch their deals first, then documents
                     const dealsRes = await DealsAPI.list_my_deals(undefined, {})
                     const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
                     
                     // Filter out archived deals
-                    const nonArchivedDeals = userDeals.filter((d: any) => !d.archived)
+                    const nonArchivedDeals = userDeals.filter((d: any) => !d.is_archived)
                     
                     if (nonArchivedDeals.length === 0) {
                         setDocuments([])
@@ -533,15 +542,6 @@ export default function DocumentsPage() {
                     // Apply filters on frontend
                     let filteredDocs = allDocs
                     
-                    // Filter by archive status
-                    if (archiveFilter !== "active") {
-                        if (archiveFilter === "archived") {
-                            filteredDocs = filteredDocs.filter((doc: any) => doc.archived)
-                        } else {
-                            filteredDocs = filteredDocs.filter((doc: any) => !doc.archived)
-                        }
-                    }
-                    
                     // Apply search filter
                     if (searchTerm) {
                         const term = searchTerm.toLowerCase()
@@ -550,6 +550,15 @@ export default function DocumentsPage() {
                             doc.id?.toString().includes(term)
                         )
                     }
+                    
+                    // Filter by archive status
+                    if (archiveFilter !== "active") {
+                        if (archiveFilter === "archived") {
+                            filteredDocs = filteredDocs.filter((doc: any) => doc.is_archived)
+                        } else {
+                            filteredDocs = filteredDocs.filter((doc: any) => !doc.is_archived)
+                        }
+                    }
 
                     setDocuments(filteredDocs)
                     setTotalDocuments(filteredDocs.length)
@@ -557,13 +566,23 @@ export default function DocumentsPage() {
             } else {
                 // Non-sales users can use the general endpoint
                 const params: any = { page: currentPage, size: size }
-                if (searchTerm) params.search = searchTerm
+                if (searchTerm) params.q = searchTerm
                 if (dealIdFilter) params.deal_id = dealIdFilter
                 if (archiveFilter !== "active") params.archive = archiveFilter
 
                 const res = await getDocuments(params)
-                const data = Array.isArray(res) ? res : (res as any)?.data || []
-                const total = (res as any)?.total || data.length
+                let data = Array.isArray(res) ? res : (res as any)?.data || []
+                let total = (res as any)?.total || data.length
+
+                // Client-side filtering as fallback if backend doesn't support search
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase()
+                    data = data.filter((doc: any) =>
+                        doc.doc_type?.toLowerCase().includes(term) ||
+                        doc.id?.toString().includes(term)
+                    )
+                    total = data.length
+                }
 
                 setDocuments(data)
                 setTotalDocuments(total)
@@ -745,7 +764,7 @@ export default function DocumentsPage() {
             }
         }, 300)
         return () => clearTimeout(timer)
-    }, [searchTerm, archiveFilter, user])
+    }, [currentPage, searchTerm, archiveFilter, user])
 
     // ─── Load clients for create dialog ────────────────────────────
 
@@ -790,7 +809,7 @@ export default function DocumentsPage() {
             const data = Array.isArray(res) ? res : (res as any)?.data || [];
             
             // Filter out archived deals on frontend
-            const nonArchivedDeals = data.filter((d: any) => !d.archived);
+            const nonArchivedDeals = data.filter((d: any) => !d.is_archived);
             
             setFilteredDeals(nonArchivedDeals);
         } catch (err: any) {
@@ -1176,26 +1195,18 @@ export default function DocumentsPage() {
                                         const canReview = doc.status === "under_review"
                                         const canSign = doc.status === "approved"
                                         const canDelete = !isReadOnly
-                                        const isArchived = doc.archived || (archiveFilter === "archived")
-
-                                        // Debug logging for each document
-                                        console.log('Processing document:', doc);
-                                        console.log('Document client_id:', doc.client_id, 'type:', typeof doc.client_id);
-                                        console.log('Document deal_id:', doc.deal_id, 'type:', typeof doc.deal_id);
+                                        const isArchived = doc.is_archived
 
                                         return (
-                                            <TableRow key={doc.id}>
+                                            <TableRow key={doc.id} className={doc.is_archived ? "bg-gray-200" : ""}>
                                                 <TableCell className="font-mono text-sm">{doc.id}</TableCell>
                                                 <TableCell>{docTypeLabels[doc.doc_type] || doc.doc_type}</TableCell>
                                                 <TableCell className="text-sm">
                                                     {(() => {
                                                         if (!doc.deal_id) {
-                                                            console.log('No deal_id for document:', doc.id);
                                                             return "—";
                                                         }
-                                                        const clientLabel = getClientFromDeal(doc.deal_id);
-                                                        console.log('Client from deal result:', clientLabel);
-                                                        return clientLabel;
+                                                        return getClientFromDeal(doc.deal_id);
                                                     })()}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
