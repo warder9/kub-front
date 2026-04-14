@@ -872,7 +872,7 @@ export default function TasksPage() {
                     const taskPriority = (task.priority || "normal") as TaskPriority
                     const allowedTransitions = statusTransitions[taskStatus] || []
                     const isFinal = taskStatus === "done" || taskStatus === "cancelled"
-                    const isArchived = (task as any).archived || false
+                    const isArchived = task.archived || (archiveFilter === "archived")
 
                     return (
                       <TableRow key={task.id}>

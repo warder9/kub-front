@@ -1322,7 +1322,7 @@ useEffect(() => {
                   </TableRow>
                 ) : (
                   clients.map((client) => {
-                    const isArchived = (client as any).archived || false;
+                    const isArchived = client.archived || (archiveFilter === "archived");
                     return (
                       <TableRow key={client.id}>
                         <TableCell className="font-medium">

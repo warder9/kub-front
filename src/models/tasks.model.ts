@@ -32,3 +32,18 @@ export type Tasks_Change_task_status_Request = {
 export type Tasks_Assign_task_Request = {
   assignee_id: number
 }
+
+export interface Task {
+  id: number
+  archived?: boolean | null
+  title: string
+  description: string
+  entity_id: number
+  entity_type: string
+  assignee_id: number
+  due_date: string
+  priority: string
+  status: string
+  created_at?: string
+  updated_at?: string
+}

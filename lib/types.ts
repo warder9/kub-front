@@ -1,5 +1,6 @@
 export interface Lead {
   id: number;
+  archived?: boolean | null;
   title: string;
   description: string;
   created_at: string;

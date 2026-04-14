@@ -973,12 +973,22 @@ export default function DocumentsPage() {
             {/* Documents Table */}
             <Card className="mx-6 mb-6">
                 <CardHeader>
-                    <CardTitle>Список документов</CardTitle>
-                    <CardDescription>
-                        {documents.length > 0
-                            ? `Найдено ${totalDocuments} документов`
-                            : "Документов не найдено"}
-                    </CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>Список документов</CardTitle>
+                            <CardDescription>
+                                {documents.length > 0
+                                    ? `Найдено ${totalDocuments} документов`
+                                    : "Документов не найдено"}
+                            </CardDescription>
+                        </div>
+                        <div className="w-full sm:w-48">
+                            <ArchiveFilter
+                                value={archiveFilter}
+                                onChange={setArchiveFilter}
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {!documents || documents.length === 0 ? (
@@ -1008,6 +1018,7 @@ export default function DocumentsPage() {
                                         const canReview = doc.status === "under_review"
                                         const canSign = doc.status === "approved"
                                         const canDelete = !isReadOnly
+                                        const isArchived = doc.archived || (archiveFilter === "archived")
 
                                         // Debug logging for each document
                                         console.log('Processing document:', doc);
@@ -1033,9 +1044,14 @@ export default function DocumentsPage() {
                                                     {doc.deal_id ? getDealLabel(doc.deal_id) : "—"}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge className={`${statusColors[doc.status] || "bg-gray-100 text-gray-700"} text-xs`}>
-                                                        {statusLabels[doc.status] || doc.status}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge className={`${statusColors[doc.status] || "bg-gray-100 text-gray-700"} text-xs`}>
+                                                            {statusLabels[doc.status] || doc.status}
+                                                        </Badge>
+                                                        {isArchived && (
+                                                            <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     {doc.sign_status ? (
@@ -1100,13 +1116,29 @@ export default function DocumentsPage() {
                                                             {canDelete && (
                                                                 <>
                                                                     <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => { setDeleteId(doc.id); setIsDeleteOpen(true) }}
-                                                                        className="text-red-600"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4 mr-2" />
-                                                                        Удалить
-                                                                    </DropdownMenuItem>
+                                                                    {isArchived ? (
+                                                                        <DropdownMenuItem onClick={() => { setDocToArchive(doc); setIsUnarchiveDialogOpen(true); }}>
+                                                                            <ArchiveRestore className="h-4 w-4 mr-2" />
+                                                                            Разархивировать
+                                                                        </DropdownMenuItem>
+                                                                    ) : (
+                                                                        <DropdownMenuItem onClick={() => { setDocToArchive(doc); setIsArchiveDialogOpen(true); }}>
+                                                                            <Archive className="h-4 w-4 mr-2" />
+                                                                            Архивировать
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {isAdmin && (
+                                                                        <>
+                                                                            <DropdownMenuSeparator />
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => { setDeleteId(doc.id); setIsDeleteOpen(true) }}
+                                                                                className="text-red-600"
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                                                Удалить
+                                                                            </DropdownMenuItem>
+                                                                        </>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </DropdownMenuContent>
@@ -1558,6 +1590,42 @@ export default function DocumentsPage() {
                 documentId={selectedPdfDoc?.id || 0}
                 documentName={selectedPdfDoc ? (docTypeLabels[selectedPdfDoc.doc_type] || selectedPdfDoc.doc_type) : undefined}
             />
+
+            {/* ── Archive Dialog ─────────────────────────────────────────── */}
+            <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Архивировать документ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Документ будет перемещен в архив. Вы сможете восстановить его позже.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleArchiveDocument}>
+                            Архивировать
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* ── Unarchive Dialog ───────────────────────────────────────── */}
+            <AlertDialog open={isUnarchiveDialogOpen} onOpenChange={setIsUnarchiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Разархивировать документ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Документ будет восстановлен из архива и снова станет доступен.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleUnarchiveDocument}>
+                            Разархивировать
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }

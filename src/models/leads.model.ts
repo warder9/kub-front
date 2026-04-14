@@ -30,3 +30,14 @@ export type Leads_Update_lead_status_Request = {
   to: string
   comment: string
 }
+
+export interface Lead {
+  id: number
+  archived?: boolean | null
+  title: string
+  description: string
+  owner_id: number
+  status: string
+  created_at?: string
+  updated_at?: string
+}

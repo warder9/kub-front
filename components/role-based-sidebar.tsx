@@ -44,6 +44,36 @@ interface SidebarItem {
 const sidebarItems: Record<string, SidebarItem[]> = {
   system_admin: [
     {
+      title: "Лиды",
+      href: "/leads",
+      icon: Target,
+      permissions: ["leads:read"],
+    },
+    {
+      title: "Сделки",
+      href: "/deals",
+      icon: Handshake,
+      permissions: ["deals:read"],
+    },
+    {
+      title: "Клиенты",
+      href: "/clients",
+      icon: Users,
+      permissions: ["clients:read"],
+    },
+    {
+      title: "Задачи",
+      href: "/tasks",
+      icon: Calendar,
+      permissions: ["tasks:read"],
+    },
+    {
+      title: "Документы",
+      href: "/documents",
+      icon: FileText,
+      permissions: ["documents:read"],
+    },
+    {
       title: "Пользователи",
       href: "/users",
       icon: UserCheck,

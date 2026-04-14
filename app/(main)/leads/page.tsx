@@ -809,7 +809,7 @@ export default function LeadsPage() {
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Лиды не найдены</TableCell></TableRow>
                 ) : (
                   leads.map((lead) => {
-                    const isArchived = (lead as any).archived || false;
+                    const isArchived = lead.archived || (archiveFilter === "archived");
                     return (
                       <TableRow key={lead.id}>
                         <TableCell className="font-medium">{lead.title}</TableCell>

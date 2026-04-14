@@ -1127,7 +1127,7 @@ export default function DealsPage() {
                   </TableRow>
                 ) : (
                   deals.map((deal) => {
-                    const isArchived = (deal as any).archived || false;
+                    const isArchived = deal.archived || (archiveFilter === "archived");
                     return (
                       <TableRow key={deal.id}>
                         <TableCell className="font-medium">#{deal.id}</TableCell>
