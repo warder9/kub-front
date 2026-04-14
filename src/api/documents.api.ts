@@ -117,6 +117,16 @@ export async function deleteDocument(id: number): Promise<any> {
   return res.data
 }
 
+export async function archiveDocument(id: number, payload?: { reason?: string }): Promise<any> {
+  const res = await api.post(`/documents/${id}/archive`, payload)
+  return res.data
+}
+
+export async function unarchiveDocument(id: number): Promise<any> {
+  const res = await api.post(`/documents/${id}/unarchive`)
+  return res.data
+}
+
 // ─── Lifecycle / Review ──────────────────────────────────────────
 
 export async function submitDocument(id: number): Promise<any> {

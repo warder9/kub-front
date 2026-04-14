@@ -67,8 +67,11 @@ import {
   Activity,
   CheckCircle,
   Calendar,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
@@ -103,6 +106,7 @@ export default function LeadsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
   const [view, setView] = useState<"all" | "my">(() => {
     // Default to "my" only for sales users, others get "all"
     const user = getCurrentUser();
@@ -115,6 +119,9 @@ export default function LeadsPage() {
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
+  const [leadToArchive, setLeadToArchive] = useState<Lead | null>(null);
   const [isAssignUserOpen, setIsAssignUserOpen] = useState(false);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -214,6 +221,7 @@ export default function LeadsPage() {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (archiveFilter !== "active") params.archive = archiveFilter;
 
       console.log('Calling API with params:', params, 'endpoint:', shouldUseMyView ? '/leads/my' : '/leads', 'userRole:', userRole, 'shouldUseMyView:', shouldUseMyView);
       const res = await fetchFn(undefined, params);
@@ -309,7 +317,7 @@ export default function LeadsPage() {
       fetchLeads();
     }, 300);
     return () => clearTimeout(timer);
-  }, [view, currentPage, searchTerm, statusFilter]);
+  }, [view, currentPage, searchTerm, statusFilter, archiveFilter]);
 
   const getStatusBadge = (status: LeadStatus) => {
     const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
@@ -557,6 +565,38 @@ export default function LeadsPage() {
     setIsStatusDialogOpen(true);
   };
 
+  const handleArchiveLead = async () => {
+    if (!leadToArchive) return;
+    try {
+      await leadsApi.archive_lead(undefined, { id: leadToArchive.id });
+      alert('Лид успешно заархивирован');
+      fetchLeads();
+    } catch (err: any) {
+      console.error("Ошибка архивации лида:", err);
+      alert(`Ошибка архивации: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsArchiveDialogOpen(false);
+      setLeadToArchive(null);
+    }
+  };
+
+  const handleUnarchiveLead = async () => {
+    if (!leadToArchive) return;
+    try {
+      await leadsApi.unarchive_lead(undefined, { id: leadToArchive.id });
+      alert('Лид успешно разархивирован');
+      fetchLeads();
+    } catch (err: any) {
+      console.error("Ошибка разархивации лида:", err);
+      alert(`Ошибка разархивации: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsUnarchiveDialogOpen(false);
+      setLeadToArchive(null);
+    }
+  };
+
+  const isAdmin = user?.role_id === 50;
+
   if (isLoading && (!leads || leads.length === 0)) {
     return (
       <>
@@ -733,6 +773,12 @@ export default function LeadsPage() {
                 ]}
               />
             </div>
+            <div className="w-full sm:w-48 overflow-visible">
+              <ArchiveFilter
+                value={archiveFilter}
+                onChange={setArchiveFilter}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -762,75 +808,112 @@ export default function LeadsPage() {
                 {(!leads || leads.length === 0) ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Лиды не найдены</TableCell></TableRow>
                 ) : (
-                  leads.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell className="font-medium">{lead.title}</TableCell>
-                      <TableCell>{lead.description}</TableCell>
-                      <TableCell>{getStatusBadge(lead.status)}</TableCell>
-                      <TableCell>{lead.owner_id}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <Calendar className="h-3 w-3 mr-1 text-gray-400" />
-                          {new Date(lead.created_at).toLocaleDateString()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          {canWrite && (
-                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(lead)} title="Редактировать">
-                              <Edit className="h-4 w-4" />
+                  leads.map((lead) => {
+                    const isArchived = (lead as any).archived || false;
+                    return (
+                      <TableRow key={lead.id}>
+                        <TableCell className="font-medium">{lead.title}</TableCell>
+                        <TableCell>{lead.description}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(lead.status)}
+                            {isArchived && (
+                              <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{lead.owner_id}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                            {new Date(lead.created_at).toLocaleDateString()}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-2">
+                            {canWrite && (
+                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(lead)} title="Редактировать">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => openAssignDialog(lead)} title="Назначить">
+                              <UserPlus className="h-4 w-4" />
                             </Button>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={() => openAssignDialog(lead)} title="Назначить">
-                            <UserPlus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openStatusDialog(lead)}
-                            disabled={statusTransitions[lead.status as LeadStatus]?.length === 0}
-                            title="Сменить статус"
-                          >
-                            <Replace className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openConvertDialog(lead)}
-                            disabled={lead.status === 'converted' || lead.status === 'cancelled'}
-                            title="Конвертировать"
-                          >
-                            <ChevronsRight className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openStatusDialog(lead)}
+                              disabled={statusTransitions[lead.status as LeadStatus]?.length === 0}
+                              title="Сменить статус"
+                            >
+                              <Replace className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openConvertDialog(lead)}
+                              disabled={lead.status === 'converted' || lead.status === 'cancelled' || isArchived}
+                              title="Конвертировать"
+                            >
+                              <ChevronsRight className="h-4 w-4" />
+                            </Button>
+                            {isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Удалить"
-                                disabled={lead.status === 'cancelled'}
+                                onClick={() => {
+                                  setLeadToArchive(lead);
+                                  setIsUnarchiveDialogOpen(true);
+                                }}
+                                title="Разархивировать"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <ArchiveRestore className="h-4 w-4" />
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Удалить лид?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Это действие невозможно отменить. Лид будет удален навсегда.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteLead(lead.id)} className="bg-red-600 hover:bg-red-700">Удалить</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setLeadToArchive(lead);
+                                  setIsArchiveDialogOpen(true);
+                                }}
+                                title="Архивировать"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Удалить"
+                                  disabled={lead.status === 'cancelled'}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Удалить лид?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Запись будет удалена без возможности восстановления.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteLead(lead.id)} className="bg-red-600 hover:bg-red-700">Удалить</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -1040,6 +1123,36 @@ export default function LeadsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Архивировать лид?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет перемещена в архив. Её можно восстановить позже.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveLead}>Архивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isUnarchiveDialogOpen} onOpenChange={setIsUnarchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Разархивировать лид?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет возвращена из архива в активный список.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnarchiveLead}>Разархивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

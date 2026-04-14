@@ -24,12 +24,17 @@ export async function createClient(payload: Models.CreateClientRequest): Promise
     // Extract detailed error message from backend if available
     const backendError = error?.response?.data;
     let errorMessage = 'Failed to create client';
-    
+
     if (backendError) {
+      console.log('Backend error response:', backendError);
+
       if (typeof backendError === 'string') {
         errorMessage = backendError;
       } else if (backendError.message) {
         errorMessage = backendError.message;
+        if (backendError.missing_fields && Array.isArray(backendError.missing_fields)) {
+          errorMessage += ` (Missing: ${backendError.missing_fields.join(', ')})`;
+        }
       } else if (backendError.error) {
         errorMessage = backendError.error;
       } else if (backendError.detail) {
@@ -37,9 +42,11 @@ export async function createClient(payload: Models.CreateClientRequest): Promise
       } else if (Array.isArray(backendError)) {
         // Handle validation errors array
         errorMessage = backendError.map(err => err.message || err).join(', ');
+      } else if (backendError.missing_fields) {
+        errorMessage = `Missing required fields: ${backendError.missing_fields.join(', ')}`;
       }
     }
-    
+
     throw new Error(errorMessage);
   }
 }
@@ -77,12 +84,66 @@ export async function getClientPhoto(clientId: string): Promise<string> {
 }
 
 export async function updateClient(id: string, payload: Models.UpdateClientRequest): Promise<Models.Client> {
-  const res = await api.put(`/clients/${id}`, payload);
-  return res.data;
+  try {
+    console.log('Updating client with payload:', payload);
+    const res = await api.put(`/clients/${id}`, payload);
+    console.log('Client update response:', res);
+    return res.data;
+  } catch (error: any) {
+    console.error('Client update failed with detailed error:', {
+      message: error?.message,
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
+      data: error?.response?.data,
+      config: {
+        url: error?.config?.url,
+        method: error?.config?.method,
+        data: error?.config?.data,
+        headers: error?.config?.headers
+      }
+    });
+
+    // Extract detailed error message from backend if available
+    const backendError = error?.response?.data;
+    let errorMessage = 'Failed to update client';
+
+    if (backendError) {
+      console.log('Backend error response:', backendError);
+
+      if (typeof backendError === 'string') {
+        errorMessage = backendError;
+      } else if (backendError.message) {
+        errorMessage = backendError.message;
+        if (backendError.missing_fields && Array.isArray(backendError.missing_fields)) {
+          errorMessage += ` (Missing: ${backendError.missing_fields.join(', ')})`;
+        }
+      } else if (backendError.error) {
+        errorMessage = backendError.error;
+      } else if (backendError.detail) {
+        errorMessage = backendError.detail;
+      } else if (Array.isArray(backendError)) {
+        errorMessage = backendError.map(err => err.message || err).join(', ');
+      } else if (backendError.missing_fields) {
+        errorMessage = `Missing required fields: ${backendError.missing_fields.join(', ')}`;
+      }
+    }
+
+    throw new Error(errorMessage);
+  }
 }
 
 export async function deleteClient(id: string): Promise<void> {
   const res = await api.delete(`/clients/${id}`);
+  return res.data;
+}
+
+export async function archiveClient(id: string, payload?: { reason?: string }): Promise<any> {
+  const res = await api.post(`/clients/${id}/archive`, payload);
+  return res.data;
+}
+
+export async function unarchiveClient(id: string): Promise<any> {
+  const res = await api.post(`/clients/${id}/unarchive`);
   return res.data;
 }
 

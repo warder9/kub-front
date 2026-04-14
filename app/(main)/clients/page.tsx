@@ -64,8 +64,11 @@ import {
   CreditCard,
   Download,
   Building,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
+import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import * as ClientAPI from "@/src/api/clients.api";
 import * as AuthAPI from "@/src/api/auth.api";
 import { Spinner } from "@/components/ui/spinner";
@@ -87,32 +90,68 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   contact_info: "",
   client_type: "individual",
   owner_id: 0,
-  
-  // Legal entity banking fields (main table)
-  contact_person_position: "",
-  bank_name: "",
-  iban: "",
-  bik: "",
-  kbe: "",
-  
+
   // Legal profile structure
   legal_profile: {
     company_name: "",
     bin: "",
-    legal_form: "",
-    director_full_name: "",
     contact_person_name: "",
     contact_person_phone: "",
-    contact_person_email: "",
     legal_address: "",
-    tax_regime: "",
-    website: "",
-    industry: "",
-    company_size: "",
+    bank_name: "",
+    iban: "",
+    bik: "",
+    kbe: "",
     additional_info: "",
   },
-  
-  // Individual specific fields (optional for legal clients)
+
+  // Individual profile structure
+  individual_profile: {
+    last_name: "",
+    first_name: "",
+    middle_name: "",
+    iin: "",
+    id_number: "",
+    passport_series: "",
+    passport_number: "",
+    registration_address: "",
+    actual_address: "",
+    country: "",
+    trip_purpose: "",
+    birth_date: "",
+    birth_place: "",
+    citizenship: "",
+    sex: "",
+    marital_status: "",
+    passport_issue_date: "",
+    passport_expire_date: "",
+    previous_last_name: "",
+    spouse_name: "",
+    spouse_contacts: "",
+    has_children: false,
+    children_list: "",
+    education: "",
+    job: "",
+    trips_last5_years: "",
+    relatives_in_destination: "",
+    trusted_person: "",
+    specialty: "",
+    trusted_person_phone: "",
+    driver_license_number: "",
+    education_institution_name: "",
+    education_institution_address: "",
+    position: "",
+    visas_received: "",
+    visa_refusals: "",
+    height: 0,
+    weight: 0,
+    driver_license_categories: "",
+    therapist_name: "",
+    clinic_name: "",
+    diseases_last3_years: "",
+  },
+
+  // Individual specific fields (optional for legal clients) - kept for backward compatibility
   last_name: "",
   first_name: "",
   middle_name: "",
@@ -144,6 +183,8 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   specialty: "",
   education_institution: "",
   education_institution_address: "",
+  education_institution_name: "",
+  education: "",
   job: "",
   position: "",
   trips_last5_years: "",
@@ -161,7 +202,6 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   therapist_name: "",
   clinic_name: "",
   diseases_last3_years: "",
-  additional_info: "",
   photo_35x45: "",
 };
 
@@ -175,6 +215,7 @@ const DetailItem = ({ label, value }: { label: string; value?: string | null }) 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [clientFormData, setClientFormData] =
     useState<Models.CreateClientRequest>(EMPTY_CLIENT);
@@ -219,6 +260,7 @@ export default function ClientsPage() {
           specialty: "",
           education_institution: "",
           education_institution_address: "",
+          education_institution_name: "",
           education: "",
           job: "",
           position: "",
@@ -237,8 +279,52 @@ export default function ClientsPage() {
           therapist_name: "",
           clinic_name: "",
           diseases_last3_years: "",
-          additional_info: "",
           photo_35x45: "",
+          individual_profile: {
+            ...prev.individual_profile,
+            last_name: "",
+            first_name: "",
+            middle_name: "",
+            iin: "",
+            id_number: "",
+            passport_series: "",
+            passport_number: "",
+            registration_address: "",
+            actual_address: "",
+            country: "",
+            trip_purpose: "",
+            birth_date: "",
+            birth_place: "",
+            citizenship: "",
+            sex: "",
+            marital_status: "",
+            passport_issue_date: "",
+            passport_expire_date: "",
+            previous_last_name: "",
+            spouse_name: "",
+            spouse_contacts: "",
+            has_children: false,
+            children_list: "",
+            education: "",
+            job: "",
+            trips_last5_years: "",
+            relatives_in_destination: "",
+            trusted_person: "",
+            specialty: "",
+            trusted_person_phone: "",
+            driver_license_number: "",
+            education_institution_name: "",
+            education_institution_address: "",
+            position: "",
+            visas_received: "",
+            visa_refusals: "",
+            height: 0,
+            weight: 0,
+            driver_license_categories: "",
+            therapist_name: "",
+            clinic_name: "",
+            diseases_last3_years: "",
+          },
         }));
       } else {
         setClientFormData(prev => ({
@@ -274,6 +360,9 @@ export default function ClientsPage() {
   }, [clientFormData.client_type, editingClient]);
   const [clientToDelete, setClientToDelete] = useState<Models.Client | null>(null);
   const [viewingClient, setViewingClient] = useState<Models.Client | null>(null);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
+  const [clientToArchive, setClientToArchive] = useState<Models.Client | null>(null);
   const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [clientProfile, setClientProfile] = useState<any>(null);
@@ -378,6 +467,7 @@ export default function ClientsPage() {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
       if (clientTypeFilter) params.client_type = clientTypeFilter;
+      if (archiveFilter !== "active") params.archive = archiveFilter;
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
@@ -563,7 +653,7 @@ useEffect(() => {
     } else {
       console.log('No user - skipping fetchClients');
     }
-  }, [clientView, currentPage, clientTypeFilter]); // Remove user from deps - we get fresh data in fetchClients
+  }, [clientView, currentPage, clientTypeFilter, archiveFilter]); // Remove user from deps - we get fresh data in fetchClients
 
   useEffect(() => {
     console.log('=== USEEFFECT 3: Search Debounce ===');
@@ -573,7 +663,7 @@ useEffect(() => {
       fetchClients(); // Always call fetchClients - it will get fresh user data
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchTerm]); // Remove user from deps
+  }, [searchTerm, archiveFilter]); // Remove user from deps
 
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -582,7 +672,7 @@ useEffect(() => {
     // Convert height and weight to numbers
     if (id === 'height' || id === 'weight') {
       setClientFormData((prev) => ({ ...prev, [id]: value ? Number(value) : 0 }));
-    } else if (['legal_form', 'director_full_name', 'tax_regime', 'website', 'industry', 'company_size'].includes(id)) {
+    } else if (['contact_person_name', 'contact_person_phone', 'legal_address', 'bank_name', 'iban', 'bik', 'kbe', 'additional_info'].includes(id)) {
       // Handle legal_profile nested fields
       setClientFormData((prev) => ({
         ...prev,
@@ -608,6 +698,10 @@ useEffect(() => {
   const handleEditClick = (client: Models.Client) => {
     resetForm(true); // Keep editingClient = false initially
     setEditingClient(client);
+
+    // Check if client has individual_profile (new backend structure)
+    const hasIndividualProfile = client.individual_profile && Object.keys(client.individual_profile).length > 0;
+
     setClientFormData({
       // Organization info
       name: client.name || "",
@@ -616,73 +710,116 @@ useEffect(() => {
       contact_info: client.contact_info || "",
       client_type: client.client_type || "individual",
 
-      // Legal entity banking fields (main table)
-      contact_person_position: client.contact_person_position || "",
-      bank_name: client.bank_name || "",
-      iban: client.iban || "",
-      bik: client.bik || "",
-      kbe: client.kbe || "",
-
       // Legal profile nested fields
       legal_profile: {
         company_name: client.legal_profile?.company_name || client.name || "",
         bin: client.legal_profile?.bin || client.bin_iin || "",
-        legal_form: client.legal_profile?.legal_form || "",
-        director_full_name: client.legal_profile?.director_full_name || "",
         contact_person_name: client.legal_profile?.contact_person_name || client.contact_info || "",
         contact_person_phone: client.legal_profile?.contact_person_phone || client.phone || "",
-        contact_person_email: client.legal_profile?.contact_person_email || client.email || "",
         legal_address: client.legal_profile?.legal_address || client.address || "",
-        tax_regime: client.legal_profile?.tax_regime || "",
-        website: client.legal_profile?.website || "",
-        industry: client.legal_profile?.industry || "",
-        company_size: client.legal_profile?.company_size || "",
+        bank_name: client.legal_profile?.bank_name || client.bank_name || "",
+        iban: client.legal_profile?.iban || client.iban || "",
+        bik: client.legal_profile?.bik || client.bik || "",
+        kbe: client.legal_profile?.kbe || client.kbe || "",
         additional_info: client.legal_profile?.additional_info || "",
       },
 
-      // Required fields (RED)
-      country: client.country || "",
-      trip_purpose: client.trip_purpose || "",
-      last_name: client.last_name || "",
-      first_name: client.first_name || "",
-      birth_date: client.birth_date || "",
+      // Individual profile nested fields (new backend structure)
+      individual_profile: hasIndividualProfile ? {
+        last_name: client.individual_profile?.last_name || "",
+        first_name: client.individual_profile?.first_name || "",
+        middle_name: client.individual_profile?.middle_name || "",
+        iin: client.individual_profile?.iin || "",
+        id_number: client.individual_profile?.id_number || "",
+        passport_series: client.individual_profile?.passport_series || "",
+        passport_number: client.individual_profile?.passport_number || "",
+        registration_address: client.individual_profile?.registration_address || "",
+        actual_address: client.individual_profile?.actual_address || "",
+        country: client.individual_profile?.country || "",
+        trip_purpose: client.individual_profile?.trip_purpose || "",
+        birth_date: client.individual_profile?.birth_date || "",
+        birth_place: client.individual_profile?.birth_place || "",
+        citizenship: client.individual_profile?.citizenship || "",
+        sex: client.individual_profile?.sex || "",
+        marital_status: client.individual_profile?.marital_status || "",
+        passport_issue_date: client.individual_profile?.passport_issue_date || "",
+        passport_expire_date: client.individual_profile?.passport_expire_date || "",
+        previous_last_name: client.individual_profile?.previous_last_name || "",
+        spouse_name: client.individual_profile?.spouse_name || "",
+        spouse_contacts: client.individual_profile?.spouse_contacts || "",
+        has_children: client.individual_profile?.has_children || false,
+        children_list: client.individual_profile?.children_list || "",
+        education: client.individual_profile?.education || "",
+        job: client.individual_profile?.job || "",
+        trips_last5_years: client.individual_profile?.trips_last5_years || "",
+        relatives_in_destination: client.individual_profile?.relatives_in_destination || "",
+        trusted_person: client.individual_profile?.trusted_person || "",
+        specialty: client.individual_profile?.specialty || "",
+        trusted_person_phone: client.individual_profile?.trusted_person_phone || "",
+        driver_license_number: client.individual_profile?.driver_license_number || "",
+        education_institution_name: client.individual_profile?.education_institution_name || "",
+        education_institution_address: client.individual_profile?.education_institution_address || "",
+        position: client.individual_profile?.position || "",
+        visas_received: client.individual_profile?.visas_received || "",
+        visa_refusals: client.individual_profile?.visa_refusals || "",
+        height: client.individual_profile?.height || 0,
+        weight: client.individual_profile?.weight || 0,
+        driver_license_categories: client.individual_profile?.driver_license_categories || "",
+        therapist_name: client.individual_profile?.therapist_name || "",
+        clinic_name: client.individual_profile?.clinic_name || "",
+        diseases_last3_years: client.individual_profile?.diseases_last3_years || "",
+      } : undefined,
+
+      // Required fields (RED) - kept for backward compatibility
+      country: hasIndividualProfile ? client.individual_profile?.country || "" : client.country || "",
+      trip_purpose: hasIndividualProfile ? client.individual_profile?.trip_purpose || "" : client.trip_purpose || "",
+      last_name: hasIndividualProfile ? client.individual_profile?.last_name || "" : client.last_name || "",
+      first_name: hasIndividualProfile ? client.individual_profile?.first_name || "" : client.first_name || "",
+      birth_date: hasIndividualProfile ? client.individual_profile?.birth_date || "" : client.birth_date || "",
       phone: client.phone || "",
 
-      // Additional required fields
-      middle_name: client.middle_name || "",
-      birth_place: client.birth_place || "",
-      citizenship: client.citizenship || "",
-      sex: client.sex || "",
-      marital_status: client.marital_status || "",
-      iin: client.iin || "",
-      id_number: client.id_number || "",
-      passport_series: client.passport_series || "",
-      passport_number: client.passport_number || "",
-      passport_issue_date: client.passport_issue_date || "",
-      passport_expire_date: client.passport_expire_date || "",
-      registration_address: client.registration_address || "",
-      actual_address: client.actual_address || "",
+      // Additional required fields - kept for backward compatibility
+      middle_name: hasIndividualProfile ? client.individual_profile?.middle_name || "" : client.middle_name || "",
+      birth_place: hasIndividualProfile ? client.individual_profile?.birth_place || "" : client.birth_place || "",
+      citizenship: hasIndividualProfile ? client.individual_profile?.citizenship || "" : client.citizenship || "",
+      sex: hasIndividualProfile ? client.individual_profile?.sex || "" : client.sex || "",
+      marital_status: hasIndividualProfile ? client.individual_profile?.marital_status || "" : client.marital_status || "",
+      iin: hasIndividualProfile ? client.individual_profile?.iin || "" : client.iin || "",
+      id_number: hasIndividualProfile ? client.individual_profile?.id_number || "" : client.id_number || "",
+      passport_series: hasIndividualProfile ? client.individual_profile?.passport_series || "" : client.passport_series || "",
+      passport_number: hasIndividualProfile ? client.individual_profile?.passport_number || "" : client.passport_number || "",
+      passport_issue_date: hasIndividualProfile ? client.individual_profile?.passport_issue_date || "" : client.passport_issue_date || "",
+      passport_expire_date: hasIndividualProfile ? client.individual_profile?.passport_expire_date || "" : client.passport_expire_date || "",
+      registration_address: hasIndividualProfile ? client.individual_profile?.registration_address || "" : client.registration_address || "",
+      actual_address: hasIndividualProfile ? client.individual_profile?.actual_address || "" : client.actual_address || "",
       email: client.email || "",
       photo_35x45: client.photo_35x45 || "",
 
-      // Optional fields
-      previous_last_name: client.previous_last_name || "",
-      spouse_name: client.spouse_name || "",
-      spouse_contacts: client.spouse_contacts || "",
-      has_children: client.has_children || false,
-      children_list: client.children_list || "",
-      education: client.education || "",
-      job: client.job || "",
-      trips_last5_years: client.trips_last5_years || "",
-      relatives_in_destination: client.relatives_in_destination || "",
-      trusted_person: client.trusted_person || "",
-      height: client.height || 0,
-      weight: client.weight || 0,
-      driver_license_categories: client.driver_license_categories || "",
-      therapist_name: client.therapist_name || "",
-      clinic_name: client.clinic_name || "",
-      diseases_last3_years: client.diseases_last3_years || "",
-      additional_info: client.additional_info || "",
+      // Optional fields - kept for backward compatibility
+      previous_last_name: hasIndividualProfile ? client.individual_profile?.previous_last_name || "" : client.previous_last_name || "",
+      spouse_name: hasIndividualProfile ? client.individual_profile?.spouse_name || "" : client.spouse_name || "",
+      spouse_contacts: hasIndividualProfile ? client.individual_profile?.spouse_contacts || "" : client.spouse_contacts || "",
+      has_children: hasIndividualProfile ? client.individual_profile?.has_children || false : client.has_children || false,
+      children_list: hasIndividualProfile ? client.individual_profile?.children_list || "" : client.children_list || "",
+      education: hasIndividualProfile ? client.individual_profile?.education || "" : client.education || "",
+      job: hasIndividualProfile ? client.individual_profile?.job || "" : client.job || "",
+      trips_last5_years: hasIndividualProfile ? client.individual_profile?.trips_last5_years || "" : client.trips_last5_years || "",
+      relatives_in_destination: hasIndividualProfile ? client.individual_profile?.relatives_in_destination || "" : client.relatives_in_destination || "",
+      trusted_person: hasIndividualProfile ? client.individual_profile?.trusted_person || "" : client.trusted_person || "",
+      specialty: hasIndividualProfile ? client.individual_profile?.specialty || "" : client.specialty || "",
+      trusted_person_phone: hasIndividualProfile ? client.individual_profile?.trusted_person_phone || "" : client.trusted_person_phone || "",
+      driver_license_number: hasIndividualProfile ? client.individual_profile?.driver_license_number || "" : client.driver_license_number || "",
+      education_institution_name: hasIndividualProfile ? client.individual_profile?.education_institution_name || "" : client.education_institution_name || "",
+      education_institution_address: hasIndividualProfile ? client.individual_profile?.education_institution_address || "" : client.education_institution_address || "",
+      position: hasIndividualProfile ? client.individual_profile?.position || "" : client.position || "",
+      visas_received: hasIndividualProfile ? client.individual_profile?.visas_received || "" : client.visas_received || "",
+      visa_refusals: hasIndividualProfile ? client.individual_profile?.visa_refusals || "" : client.visa_refusals || "",
+      height: hasIndividualProfile ? client.individual_profile?.height || 0 : client.height || 0,
+      weight: hasIndividualProfile ? client.individual_profile?.weight || 0 : client.weight || 0,
+      driver_license_categories: hasIndividualProfile ? client.individual_profile?.driver_license_categories || "" : client.driver_license_categories || "",
+      therapist_name: hasIndividualProfile ? client.individual_profile?.therapist_name || "" : client.therapist_name || "",
+      clinic_name: hasIndividualProfile ? client.individual_profile?.clinic_name || "" : client.clinic_name || "",
+      diseases_last3_years: hasIndividualProfile ? client.individual_profile?.diseases_last3_years || "" : client.diseases_last3_years || "",
     });
     setIsFormOpen(true);
   };
@@ -732,6 +869,46 @@ useEffect(() => {
       setClientToDelete(null);
     }
   };
+
+  const handleArchiveClient = async () => {
+    if (!clientToArchive) return;
+    try {
+      await ClientAPI.archiveClient(clientToArchive.id.toString());
+      toast({ title: "Успех", description: "Клиент успешно заархивирован." });
+      void fetchClients();
+    } catch (err: any) {
+      console.error("Archive client error", err);
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: err?.message || "Не удалось заархивировать клиента.",
+      });
+    } finally {
+      setIsArchiveDialogOpen(false);
+      setClientToArchive(null);
+    }
+  };
+
+  const handleUnarchiveClient = async () => {
+    if (!clientToArchive) return;
+    try {
+      await ClientAPI.unarchiveClient(clientToArchive.id.toString());
+      toast({ title: "Успех", description: "Клиент успешно разархивирован." });
+      void fetchClients();
+    } catch (err: any) {
+      console.error("Unarchive client error", err);
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: err?.message || "Не удалось разархивировать клиента.",
+      });
+    } finally {
+      setIsUnarchiveDialogOpen(false);
+      setClientToArchive(null);
+    }
+  };
+
+  const isAdmin = user?.role_id === 50;
 
   const validateRequiredFields = (): boolean => {
     const requiredFields = ['client_type', 'phone'];
@@ -827,21 +1004,13 @@ useEffect(() => {
     // Prepare payload - only send relevant fields based on client_type
     const payload: any = {
       client_type: clientFormData.client_type,
-      // Common fields
+      // Common fields that exist in backend
       name: clientFormData.name || "",
       bin_iin: clientFormData.bin_iin || "",
       address: clientFormData.address || "",
-      actual_address: clientFormData.actual_address || "",
       phone: clientFormData.phone || "",
       email: clientFormData.email || "",
       contact_info: clientFormData.contact_info || "",
-      // Banking fields (main table)
-      contact_person_position: clientFormData.contact_person_position || "",
-      bank_name: clientFormData.bank_name || "",
-      iban: clientFormData.iban || "",
-      bik: clientFormData.bik || "",
-      kbe: clientFormData.kbe || "",
-      photo_35x45: clientFormData.photo_35x45 || "",
     };
 
     // Add legal_profile for legal clients
@@ -849,20 +1018,17 @@ useEffect(() => {
       payload.legal_profile = {
         company_name: clientFormData.name || "",
         bin: clientFormData.bin_iin || "",
-        legal_form: clientFormData.legal_profile?.legal_form || "",
-        director_full_name: clientFormData.legal_profile?.director_full_name || "",
         contact_person_name: clientFormData.contact_info || "",
         contact_person_phone: clientFormData.phone || "",
-        contact_person_email: clientFormData.email || "",
         legal_address: clientFormData.address || "",
-        tax_regime: clientFormData.legal_profile?.tax_regime || "",
-        website: clientFormData.legal_profile?.website || "",
-        industry: clientFormData.legal_profile?.industry || "",
-        company_size: clientFormData.legal_profile?.company_size || "",
+        bank_name: clientFormData.legal_profile?.bank_name || "",
+        iban: clientFormData.legal_profile?.iban || "",
+        bik: clientFormData.legal_profile?.bik || "",
+        kbe: clientFormData.legal_profile?.kbe || "",
         additional_info: clientFormData.legal_profile?.additional_info || "",
       };
     } else {
-      // Individual client fields
+      // Individual client fields - send required fields at top level for validation
       payload.last_name = clientFormData.last_name || "";
       payload.first_name = clientFormData.first_name || "";
       payload.middle_name = clientFormData.middle_name || "";
@@ -870,16 +1036,17 @@ useEffect(() => {
       payload.id_number = clientFormData.id_number || "";
       payload.passport_series = clientFormData.passport_series || "";
       payload.passport_number = clientFormData.passport_number || "";
+      payload.passport_issue_date = clientFormData.passport_issue_date ? clientFormData.passport_issue_date.split('T')[0] : "";
+      payload.passport_expire_date = clientFormData.passport_expire_date ? clientFormData.passport_expire_date.split('T')[0] : "";
       payload.registration_address = clientFormData.registration_address || "";
+      payload.actual_address = clientFormData.actual_address || "";
       payload.country = clientFormData.country || "";
       payload.trip_purpose = clientFormData.trip_purpose || "";
-      payload.birth_date = clientFormData.birth_date || "";
+      payload.birth_date = clientFormData.birth_date ? clientFormData.birth_date.split('T')[0] : "";
       payload.birth_place = clientFormData.birth_place || "";
       payload.citizenship = clientFormData.citizenship || "";
       payload.sex = clientFormData.sex || "";
       payload.marital_status = clientFormData.marital_status || "";
-      payload.passport_issue_date = clientFormData.passport_issue_date || "";
-      payload.passport_expire_date = clientFormData.passport_expire_date || "";
       payload.previous_last_name = clientFormData.previous_last_name || "";
       payload.spouse_name = clientFormData.spouse_name || "";
       payload.spouse_contacts = clientFormData.spouse_contacts || "";
@@ -890,21 +1057,145 @@ useEffect(() => {
       payload.trips_last5_years = clientFormData.trips_last5_years || "";
       payload.relatives_in_destination = clientFormData.relatives_in_destination || "";
       payload.trusted_person = clientFormData.trusted_person || "";
+      payload.specialty = clientFormData.specialty || "";
+      payload.trusted_person_phone = clientFormData.trusted_person_phone || "";
+      payload.driver_license_number = clientFormData.driver_license_number || "";
+      payload.education_institution_name = clientFormData.education_institution_name || "";
+      payload.education_institution_address = clientFormData.education_institution_address || "";
+      payload.position = clientFormData.position || "";
+      payload.visas_received = clientFormData.visas_received || "";
+      payload.visa_refusals = clientFormData.visa_refusals || "";
       payload.height = clientFormData.height || 0;
       payload.weight = clientFormData.weight || 0;
       payload.driver_license_categories = clientFormData.driver_license_categories || "";
       payload.therapist_name = clientFormData.therapist_name || "";
       payload.clinic_name = clientFormData.clinic_name || "";
       payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
-      payload.additional_info = clientFormData.additional_info || "";
+
+      // Also send individual_profile for complete data
+      payload.individual_profile = {
+        last_name: clientFormData.last_name || "",
+        first_name: clientFormData.first_name || "",
+        middle_name: clientFormData.middle_name || "",
+        iin: clientFormData.iin || "",
+        id_number: clientFormData.id_number || "",
+        passport_series: clientFormData.passport_series || "",
+        passport_number: clientFormData.passport_number || "",
+        registration_address: clientFormData.registration_address || "",
+        actual_address: clientFormData.actual_address || "",
+        country: clientFormData.country || "",
+        trip_purpose: clientFormData.trip_purpose || "",
+        birth_date: clientFormData.birth_date ? clientFormData.birth_date.split('T')[0] : "",
+        birth_place: clientFormData.birth_place || "",
+        citizenship: clientFormData.citizenship || "",
+        sex: clientFormData.sex || "",
+        marital_status: clientFormData.marital_status || "",
+        passport_issue_date: clientFormData.passport_issue_date ? clientFormData.passport_issue_date.split('T')[0] : "",
+        passport_expire_date: clientFormData.passport_expire_date ? clientFormData.passport_expire_date.split('T')[0] : "",
+        previous_last_name: clientFormData.previous_last_name || "",
+        spouse_name: clientFormData.spouse_name || "",
+        spouse_contacts: clientFormData.spouse_contacts || "",
+        has_children: clientFormData.has_children || false,
+        children_list: clientFormData.children_list || "",
+        education: clientFormData.education || "",
+        job: clientFormData.job || "",
+        trips_last5_years: clientFormData.trips_last5_years || "",
+        relatives_in_destination: clientFormData.relatives_in_destination || "",
+        trusted_person: clientFormData.trusted_person || "",
+        specialty: clientFormData.specialty || "",
+        trusted_person_phone: clientFormData.trusted_person_phone || "",
+        driver_license_number: clientFormData.driver_license_number || "",
+        education_institution_name: clientFormData.education_institution_name || "",
+        education_institution_address: clientFormData.education_institution_address || "",
+        position: clientFormData.position || "",
+        visas_received: clientFormData.visas_received || "",
+        visa_refusals: clientFormData.visa_refusals || "",
+        height: clientFormData.height || 0,
+        weight: clientFormData.weight || 0,
+        driver_license_categories: clientFormData.driver_license_categories || "",
+        therapist_name: clientFormData.therapist_name || "",
+        clinic_name: clientFormData.clinic_name || "",
+        diseases_last3_years: clientFormData.diseases_last3_years || "",
+      };
     }
 
     try {
       if (editingClient) {
         console.log('Updating existing client:', editingClient.id);
-        console.log('Update payload:', payload);
-        console.log('Update legal_profile:', payload.legal_profile);
-        await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), payload as any, selectedPhotoFile || undefined);
+
+        // For updates, build a separate payload that handles pointer fields correctly
+        const updatePayload: any = {
+          name: clientFormData.name || "",
+          bin_iin: clientFormData.bin_iin || "",
+          address: clientFormData.address || "",
+          phone: clientFormData.phone || "",
+          email: clientFormData.email || "",
+          contact_info: clientFormData.contact_info || "",
+          last_name: clientFormData.last_name || "",
+          first_name: clientFormData.first_name || "",
+          middle_name: clientFormData.middle_name || "",
+          iin: clientFormData.iin || "",
+          id_number: clientFormData.id_number || "",
+          passport_series: clientFormData.passport_series || "",
+          passport_number: clientFormData.passport_number || "",
+          registration_address: clientFormData.registration_address || "",
+          actual_address: clientFormData.actual_address || "",
+          country: clientFormData.country || "",
+          trip_purpose: clientFormData.trip_purpose || "",
+          birth_date: clientFormData.birth_date ? clientFormData.birth_date.split('T')[0] : "",
+          birth_place: clientFormData.birth_place || "",
+          citizenship: clientFormData.citizenship || "",
+          sex: clientFormData.sex || "",
+          marital_status: clientFormData.marital_status || "",
+          passport_issue_date: clientFormData.passport_issue_date ? clientFormData.passport_issue_date.split('T')[0] : "",
+          passport_expire_date: clientFormData.passport_expire_date ? clientFormData.passport_expire_date.split('T')[0] : "",
+        };
+
+        // Optional pointer fields - only send if not empty
+        if (clientFormData.previous_last_name) updatePayload.previous_last_name = clientFormData.previous_last_name;
+        if (clientFormData.spouse_name) updatePayload.spouse_name = clientFormData.spouse_name;
+        if (clientFormData.spouse_contacts) updatePayload.spouse_contacts = clientFormData.spouse_contacts;
+        if (clientFormData.has_children !== undefined && clientFormData.has_children !== false) updatePayload.has_children = clientFormData.has_children;
+        if (clientFormData.children_list) updatePayload.children_list = JSON.stringify(clientFormData.children_list);
+        if (clientFormData.education) updatePayload.education = clientFormData.education;
+        if (clientFormData.job) updatePayload.job = clientFormData.job;
+        if (clientFormData.trips_last5_years) updatePayload.trips_last5_years = clientFormData.trips_last5_years;
+        if (clientFormData.relatives_in_destination) updatePayload.relatives_in_destination = clientFormData.relatives_in_destination;
+        if (clientFormData.trusted_person) updatePayload.trusted_person = clientFormData.trusted_person;
+        if (clientFormData.specialty) updatePayload.specialty = clientFormData.specialty;
+        if (clientFormData.trusted_person_phone) updatePayload.trusted_person_phone = clientFormData.trusted_person_phone;
+        if (clientFormData.driver_license_number) updatePayload.driver_license_number = clientFormData.driver_license_number;
+        if (clientFormData.education_institution_name) updatePayload.education_institution_name = clientFormData.education_institution_name;
+        if (clientFormData.education_institution_address) updatePayload.education_institution_address = clientFormData.education_institution_address;
+        if (clientFormData.position) updatePayload.position = clientFormData.position;
+        if (clientFormData.visas_received) updatePayload.visas_received = clientFormData.visas_received;
+        if (clientFormData.visa_refusals) updatePayload.visa_refusals = clientFormData.visa_refusals;
+        if (clientFormData.height && clientFormData.height > 0) updatePayload.height = clientFormData.height;
+        if (clientFormData.weight && clientFormData.weight > 0) updatePayload.weight = clientFormData.weight;
+        if (clientFormData.driver_license_categories) updatePayload.driver_license_categories = JSON.stringify(clientFormData.driver_license_categories);
+        if (clientFormData.therapist_name) updatePayload.therapist_name = clientFormData.therapist_name;
+        if (clientFormData.clinic_name) updatePayload.clinic_name = clientFormData.clinic_name;
+        if (clientFormData.diseases_last3_years) updatePayload.diseases_last3_years = clientFormData.diseases_last3_years;
+        if (clientFormData.additional_info) updatePayload.additional_info = clientFormData.additional_info;
+
+        // Add legal_profile for legal clients
+        if (clientFormData.client_type === "legal") {
+          updatePayload.legal_profile = {
+            company_name: clientFormData.name || "",
+            bin: clientFormData.bin_iin || "",
+            contact_person_name: clientFormData.contact_info || "",
+            contact_person_phone: clientFormData.phone || "",
+            legal_address: clientFormData.address || "",
+            bank_name: clientFormData.legal_profile?.bank_name || "",
+            iban: clientFormData.legal_profile?.iban || "",
+            bik: clientFormData.legal_profile?.bik || "",
+            kbe: clientFormData.legal_profile?.kbe || "",
+            additional_info: clientFormData.legal_profile?.additional_info || "",
+          };
+        }
+
+        console.log('Update payload:', updatePayload);
+        await ClientAPI.updateClientWithPhoto(editingClient.id.toString(), updatePayload, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно обновлен." });
       } else {
         console.log('Creating new client with payload:', payload);
@@ -912,6 +1203,8 @@ useEffect(() => {
         toast({ title: "Успех", description: "Клиент успешно создан." });
       }
       void fetchClients(); // Refresh list
+      setIsFormOpen(false);
+      resetForm();
     } catch (err: any) {
       console.error("Form submit error", err);
       setError(err?.message || "Произошла ошибка.");
@@ -920,9 +1213,7 @@ useEffect(() => {
         title: "Ошибка",
         description: err?.message || "Не удалось сохранить клиента.",
       });
-    } finally {
-      setIsFormOpen(false);
-      resetForm();
+      // Don't close modal on error - keep it open so user can fix the issue
     }
   };
 
@@ -1004,6 +1295,12 @@ useEffect(() => {
                 ]}
               />
             </div>
+            <div className="w-48 overflow-visible">
+              <ArchiveFilter
+                value={archiveFilter}
+                onChange={setArchiveFilter}
+              />
+            </div>
             {user?.role !== 'sales' && (
               <Button
                 variant={clientView === "all" ? "secondary" : "outline"}
@@ -1058,77 +1355,111 @@ useEffect(() => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  clients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">
-                        {client.name ||
-                          `${client.last_name} ${client.first_name}`}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={client.client_type === "legal" ? "default" : "secondary"}>
-                          {client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{client.bin_iin || client.iin || '-'}</TableCell>
-                      <TableCell>
-                        {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
-                      </TableCell>
-                      <TableCell>{client.phone}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Просмотр"
-                            className="hover:bg-gray-100"
-                            onClick={() => handleViewClick(client)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          {canEdit && (
+                  clients.map((client) => {
+                    const isArchived = (client as any).archived || false;
+                    return (
+                      <TableRow key={client.id}>
+                        <TableCell className="font-medium">
+                          {client.name ||
+                            `${client.last_name} ${client.first_name}`}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={client.client_type === "legal" ? "default" : "secondary"}>
+                              {client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                            </Badge>
+                            {isArchived && (
+                              <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{client.bin_iin || client.iin || '-'}</TableCell>
+                        <TableCell>
+                          {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
+                        </TableCell>
+                        <TableCell>{client.phone}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
                             <Button
                               variant="ghost"
                               size="icon"
-                              title="Редактировать"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => handleEditClick(client)}
+                              title="Просмотр"
+                              className="hover:bg-gray-100"
+                              onClick={() => handleViewClick(client)}
                             >
-                              <Edit className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          )}
 
-                          {canDelete && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  title="Удалить"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleDeleteClick(client)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Это действие приведет к удалению клиента. Эту операцию нельзя будет отменить.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel onClick={() => setClientToDelete(null)}>Отмена</AlertDialogCancel>
-                                  <AlertDialogAction onClick={handleDeleteConfirm}>Удалить</AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Редактировать"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => handleEditClick(client)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+
+                            {isArchived ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setClientToArchive(client);
+                                  setIsUnarchiveDialogOpen(true);
+                                }}
+                                title="Разархивировать"
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setClientToArchive(client);
+                                  setIsArchiveDialogOpen(true);
+                                }}
+                                title="Архивировать"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Удалить"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => handleDeleteClick(client)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Удалить клиента?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Запись будет удалена без возможности восстановления.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={() => setClientToDelete(null)}>Отмена</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">Удалить</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -1576,88 +1907,28 @@ useEffect(() => {
                       <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
                     </div>
                     <div>
-                      <Label htmlFor="contact_person_position">Должность подписанта</Label>
-                      <Input id="contact_person_position" placeholder="Должность..." value={clientFormData.contact_person_position || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
                       <Label htmlFor="phone" className="text-red-600">Телефон контактного лица *</Label>
                       <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
                     </div>
                     <div>
                       <Label htmlFor="bank_name">Название банка</Label>
-                      <Input id="bank_name" placeholder="Название банка..." value={clientFormData.bank_name || ""} onChange={handleFormChange} />
+                      <Input id="bank_name" placeholder="Название банка..." value={clientFormData.legal_profile?.bank_name || ""} onChange={handleFormChange} />
                     </div>
                     <div>
                       <Label htmlFor="iban">IBAN</Label>
-                      <Input id="iban" placeholder="IBAN..." value={clientFormData.iban || ""} onChange={handleFormChange} />
+                      <Input id="iban" placeholder="IBAN..." value={clientFormData.legal_profile?.iban || ""} onChange={handleFormChange} />
                     </div>
                     <div>
                       <Label htmlFor="bik">БИК</Label>
-                      <Input id="bik" placeholder="БИК..." value={clientFormData.bik || ""} onChange={handleFormChange} />
+                      <Input id="bik" placeholder="БИК..." value={clientFormData.legal_profile?.bik || ""} onChange={handleFormChange} />
                     </div>
                     <div>
                       <Label htmlFor="kbe">КБЕ</Label>
-                      <Input id="kbe" placeholder="КБЕ..." value={clientFormData.kbe || ""} onChange={handleFormChange} />
+                      <Input id="kbe" placeholder="КБЕ..." value={clientFormData.legal_profile?.kbe || ""} onChange={handleFormChange} />
                     </div>
                     <div className="md:col-span-2 lg:col-span-3">
                       <Label htmlFor="additional_info">Дополнительная информация</Label>
-                      <Textarea id="additional_info" placeholder="Комментарии и заметки..." value={clientFormData.additional_info || ""} onChange={handleFormChange} rows={3} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Photo upload for individual clients */}
-              {clientFormData.client_type === "individual" && (
-                <div className="space-y-4 border-t pt-4">
-                  <h3 className="font-semibold text-lg">ФОТО</h3>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
-                    <div className="space-y-2">
-                      {photoPreview ? (
-                        <div className="relative">
-                          <img 
-                            src={photoPreview} 
-                            alt="Preview" 
-                            className="w-32 h-40 object-cover rounded border border-gray-200"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="absolute top-1 right-1 h-6 w-6 p-0"
-                            onClick={clearPhoto}
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                          <div className="text-center">
-                            <div className="text-gray-400 mb-2">
-                              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                              </svg>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
-                                Выберите фото
-                              </label>
-                              {' '}
-                              или перетащите файл сюда
-                            </div>
-                            <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
-                          </div>
-                          <input
-                            id="photo-upload"
-                            type="file"
-                            className="hidden"
-                            accept=".jpg,.jpeg,.png"
-                            onChange={handlePhotoSelect}
-                          />
-                        </div>
-                      )}
+                      <Textarea id="additional_info" placeholder="Комментарии и заметки..." value={clientFormData.legal_profile?.additional_info || ""} onChange={handleFormChange} rows={3} />
                     </div>
                   </div>
                 </div>
@@ -1681,201 +1952,158 @@ useEffect(() => {
           setClientPhotoUrl(null);
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>{viewingClient?.name || `${viewingClient?.last_name} ${viewingClient?.first_name}`}</DialogTitle>
             <DialogDescription>Детальная информация о клиенте</DialogDescription>
           </DialogHeader>
           {viewingClient && (
             <ScrollArea className="max-h-[70vh] p-4">
-              <div className="space-y-6">
-                {/* Photo Section */}
-                {clientProfile?.files?.photo35x45?.exists && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Фото клиента
-                    </h3>
-                    <div className="flex items-center gap-4">
-                      {clientPhotoUrl ? (
-                        <img 
-                          src={clientPhotoUrl}
-                          alt="Client Photo" 
-                          className="w-32 h-40 object-cover rounded border border-gray-200"
-                          onLoad={() => {
-                            console.log('Client photo loaded successfully');
-                          }}
-                          onError={(e) => {
-                            console.error('Failed to load client photo:', e);
-                          }}
-                        />
-                      ) : (
-                        <div className="w-32 h-40 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                          <span className="text-gray-500 text-sm">Загрузка...</span>
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = `/api-proxy/clients/${viewingClient?.id}/files/primary/download?category=photo35x45`;
-                            link.download = `client_${viewingClient?.id}_photo.jpg`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                          }}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Скачать фото
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {clientProfile?.files?.photo35x45?.exists && <Separator />}
-                {/* Required Fields */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 text-red-600 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    Обязательные поля
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Тип клиента" value={viewingClient.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"} />
-                    {viewingClient.client_type !== "legal" && (
-                      <>
+              <div className="space-y-8">
+                {/* Individual Client Fields */}
+                {viewingClient.client_type === "individual" && (
+                  <>
+                    {/* Country and Trip Purpose */}
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg">СТРАНА И ЦЕЛЬ ПОЕЗДКИ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Страна" value={viewingClient.country} />
                         <DetailItem label="Цель поездки" value={viewingClient.trip_purpose} />
-                      </>
-                    )}
-                    {viewingClient.client_type !== "legal" && (
-                      <>
-                        <DetailItem label="Фамилия" value={viewingClient.last_name} />
-                        <DetailItem label="Имя" value={viewingClient.first_name} />
-                        <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
-                      </>
-                    )}
-                    <DetailItem label="Телефон" value={viewingClient.phone} />
-                  </div>
-                </div>
-                <Separator />
-
-                {/* Personal Information - only for individual clients */}
-                {viewingClient.client_type !== "legal" && (
-                  <>
-                    <div>
-                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                        <UserIcon className="h-5 w-5" />
-                        Персональная информация
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <DetailItem label="Отчество" value={viewingClient.middle_name} />
-                        <DetailItem label="Место рождения" value={viewingClient.birth_place} />
-                        <DetailItem label="Гражданство" value={viewingClient.citizenship} />
-                        <DetailItem label="Пол" value={viewingClient.sex} />
-                        <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
-                        <DetailItem label="ИИН" value={viewingClient.iin} />
                       </div>
                     </div>
-                    <Separator />
-                  </>
-                )}
 
-                {/* Document Information - only for individual clients */}
-                {viewingClient.client_type !== "legal" && (
-                  <>
-                    <div>
-                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                        <CreditCard className="h-5 w-5" />
-                        Документы
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
+                    {/* Personal Data */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">ЛИЧНЫЕ ДАННЫЕ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <DetailItem label="Фамилия" value={viewingClient.last_name} />
+                        <DetailItem label="Имя" value={viewingClient.first_name} />
+                        <DetailItem label="Отчество" value={viewingClient.middle_name} />
+                        <DetailItem label="Прежняя фамилия" value={viewingClient.previous_last_name} />
+                        <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
+                        <DetailItem label="Пол" value={viewingClient.sex} />
+                        <DetailItem label="Гражданство" value={viewingClient.citizenship} />
+                        <DetailItem label="Место рождения" value={viewingClient.birth_place} />
+                      </div>
+                    </div>
+
+                    {/* Documents */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">ДОКУМЕНТЫ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="ИИН" value={viewingClient.iin} />
                         <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
                         <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
                         <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
                         <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
                         <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expire_date} />
-                        <DetailItem label="Фото 3,5x4,5" value={viewingClient.photo_35x45} />
                       </div>
                     </div>
-                    <Separator />
-                  </>
-                )}
-                
-                {/* Contact Information */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <Phone className="h-5 w-5" />
-                    Контактная информация
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailItem label="Email" value={viewingClient.email} />
-                    <DetailItem label="Адрес прописки" value={viewingClient.registration_address} />
-                    <DetailItem label="Адрес проживания" value={viewingClient.actual_address} />
-                  </div>
-                </div>
-                <Separator />
 
-                {/* Additional Information - only for individual clients */}
-                {viewingClient.client_type !== "legal" && (
-                  <>
-                    <div>
-                      <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        Дополнительная информация
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <DetailItem label="Прежняя фамилия (девичья)" value={viewingClient.previous_last_name} />
-                        <DetailItem label="Супруг(а)" value={viewingClient.spouse_name} />
-                        <DetailItem label="Контакты супруга(и)" value={viewingClient.spouse_contacts} />
-                        <DetailItem label="Есть дети" value={viewingClient.has_children ? "Да" : "Нет"} />
+                    {/* Marital Status */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">СЕМЕЙНОЕ ПОЛОЖЕНИЕ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
+                        <DetailItem label="Есть ли дети" value={viewingClient.has_children ? "Да" : "Нет"} />
+                        <DetailItem label="ФИО супруга(и)" value={viewingClient.spouse_name} />
+                        <DetailItem label="Телефон супруга(и)" value={viewingClient.spouse_contacts} />
                         <DetailItem label="Дети" value={viewingClient.children_list} />
+                      </div>
+                    </div>
+
+                    {/* Trusted Person */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">ДОВЕРЕННОЕ ЛИЦО</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="ФИО доверенного лица" value={viewingClient.trusted_person} />
+                      </div>
+                    </div>
+
+                    {/* Contacts and Address */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">КОНТАКТЫ И АДРЕС</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="Адрес прописки" value={viewingClient.registration_address} />
+                        <DetailItem label="Адрес проживания" value={viewingClient.actual_address} />
+                        <DetailItem label="Телефон" value={viewingClient.phone} />
+                        <DetailItem label="Email" value={viewingClient.email} />
+                      </div>
+                    </div>
+
+                    {/* Work and Education */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">РАБОТА И ОБРАЗОВАНИЕ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Образование" value={viewingClient.education} />
-                        <DetailItem label="Место работы и должность" value={viewingClient.job} />
-                        <DetailItem label="Поездки и визы за 5 лет" value={viewingClient.trips_last5_years} />
-                        <DetailItem label="Члены семьи за рубежом" value={viewingClient.relatives_in_destination} />
-                        <DetailItem label="Доверенное лицо" value={viewingClient.trusted_person} />
+                        <DetailItem label="Место работы" value={viewingClient.job} />
+                        <DetailItem label="Поездки за 5 лет" value={viewingClient.trips_last5_years} />
+                        <DetailItem label="Родственники в стране назначения" value={viewingClient.relatives_in_destination} />
+                      </div>
+                    </div>
+
+                    {/* Medical Information */}
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">МЕДИЦИНСКАЯ ИНФОРМАЦИЯ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Рост" value={viewingClient.height?.toString()} />
                         <DetailItem label="Вес" value={viewingClient.weight?.toString()} />
-                        <DetailItem label="Права ВУ" value={viewingClient.driver_license_categories} />
+                        <DetailItem label="Категории водительских прав" value={viewingClient.driver_license_categories} />
                         <DetailItem label="Терапевт" value={viewingClient.therapist_name} />
                         <DetailItem label="Клиника" value={viewingClient.clinic_name} />
-                        <DetailItem label="Заболевания / Травмы" value={viewingClient.diseases_last3_years} />
-                        <DetailItem label="Дополнительная информация" value={viewingClient.additional_info} />
+                        <DetailItem label="Заболевания за 3 года" value={viewingClient.diseases_last3_years} />
                       </div>
                     </div>
-                    <Separator />
                   </>
                 )}
-                
-                {/* Organization Information - only for legal clients */}
+
+                {/* Legal Client Fields */}
                 {viewingClient.client_type === "legal" && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                      <Briefcase className="h-5 w-5" />
-                      Информация об организации
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <DetailItem label="Название" value={viewingClient.name} />
-                      <DetailItem label="БИН/ИИН" value={viewingClient.bin_iin} />
-                      <DetailItem label="Организационно-правовая форма" value={viewingClient.legal_profile?.legal_form} />
-                      <DetailItem label="ФИО директора" value={viewingClient.legal_profile?.director_full_name} />
-                      <DetailItem label="Контактное лицо" value={viewingClient.contact_info} />
-                      <DetailItem label="Должность контактного лица" value={viewingClient.contact_person_position} />
-                      <DetailItem label="Юридический адрес" value={viewingClient.address} />
-                      <DetailItem label="Фактический адрес" value={viewingClient.actual_address} />
-                      <DetailItem label="Название банка" value={viewingClient.bank_name} />
-                      <DetailItem label="IBAN" value={viewingClient.iban} />
-                      <DetailItem label="БИК" value={viewingClient.bik} />
-                      <DetailItem label="КБЕ" value={viewingClient.kbe} />
-                      <DetailItem label="Налоговый режим" value={viewingClient.legal_profile?.tax_regime} />
-                      <DetailItem label="Веб-сайт" value={viewingClient.legal_profile?.website} />
-                      <DetailItem label="Отрасль" value={viewingClient.legal_profile?.industry} />
-                      <DetailItem label="Размер компании" value={viewingClient.legal_profile?.company_size} />
+                  <>
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg">ИНФОРМАЦИЯ О КОМПАНИИ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="Название компании" value={viewingClient.legal_profile?.company_name || viewingClient.name} />
+                        <DetailItem label="БИН" value={viewingClient.legal_profile?.bin || viewingClient.bin_iin} />
+                        <DetailItem label="Юридический адрес" value={viewingClient.legal_profile?.legal_address || viewingClient.address} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">КОНТАКТНОЕ ЛИЦО</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="ФИО контактного лица" value={viewingClient.legal_profile?.contact_person_name || viewingClient.contact_info} />
+                        <DetailItem label="Телефон контактного лица" value={viewingClient.legal_profile?.contact_person_phone || viewingClient.phone} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">БАНКОВСКИЕ РЕКВИЗИТЫ</h3>
+                      <Separator />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name} />
+                        <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban} />
+                        <DetailItem label="БИК" value={viewingClient.legal_profile?.bik} />
+                        <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="font-semibold text-lg">ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ</h3>
+                      <Separator />
                       <DetailItem label="Дополнительная информация" value={viewingClient.legal_profile?.additional_info} />
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </ScrollArea>
@@ -1885,6 +2113,36 @@ useEffect(() => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Архивировать клиента?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет перемещена в архив. Её можно восстановить позже.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveClient}>Архивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isUnarchiveDialogOpen} onOpenChange={setIsUnarchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Разархивировать клиента?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет возвращена из архива в активный список.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnarchiveClient}>Разархивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -17,36 +17,46 @@ export async function list_my_tasks(payload?: void, params?: Record<string, any>
 }
 
 export async function get_task(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/tasks/${params.id}`, { params })
+  const res = await api.get(`/tasks/${params?.id}`, params ? { params } : {})
   return res.data
 }
 
 export async function update_task(payload: Models.Tasks_Update_task_Request, params?: Record<string, any>): Promise<any> {
-  const res = await api.put(`/tasks/${params.id}`, payload)
+  const res = await api.put(`/tasks/${params?.id}`, payload)
   return res.data
 }
 
 export async function delete_task(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.delete(`/tasks/${params.id}`, { params })
+  const res = await api.delete(`/tasks/${params?.id}`, params ? { params } : {})
   return res.data
 }
 
 export async function change_task_status(payload: Models.Tasks_Change_task_status_Request, params?: Record<string, any>): Promise<any> {
-  const res = await api.post(`/tasks/${params.id}/status`, payload)
+  const res = await api.post(`/tasks/${params?.id}/status`, payload)
   return res.data
 }
 
 export async function assign_task(payload: Models.Tasks_Assign_task_Request, params?: Record<string, any>): Promise<any> {
-  const res = await api.post(`/tasks/${params.id}/assign`, payload)
+  const res = await api.post(`/tasks/${params?.id}/assign`, payload)
   return res.data
 }
 
 export async function complete_task(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.post(`/tasks/${params.id}/complete`, payload)
+  const res = await api.post(`/tasks/${params?.id}/complete`, payload)
   return res.data
 }
 
 export async function remind_later(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.post(`/tasks/${params.id}/remind-later`, payload)
+  const res = await api.post(`/tasks/${params?.id}/remind-later`, payload)
+  return res.data
+}
+
+export async function archive_task(payload?: { reason?: string }, params?: Record<string, any>): Promise<any> {
+  const res = await api.post(`/tasks/${params?.id}/archive`, payload)
+  return res.data
+}
+
+export async function unarchive_task(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.post(`/tasks/${params?.id}/unarchive`)
   return res.data
 }

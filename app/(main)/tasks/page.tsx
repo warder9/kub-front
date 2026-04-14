@@ -81,12 +81,15 @@ import {
   ClipboardList,
   Activity,
   XCircle,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
 import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth"
+import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { getMe } from "@/src/api/auth.api"
 import {
   create_task,
@@ -97,6 +100,9 @@ import {
   change_task_status,
   assign_task,
   complete_task,
+  remind_later,
+  archive_task,
+  unarchive_task,
 } from "@/src/api/tasks.api"
 import { listUsers } from "@/src/api/users.api"
 
@@ -238,8 +244,9 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([])
   const [totalTasks, setTotalTasks] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
 
   const [users, setUsers] = useState<any[]>([])
   const [deals, setDeals] = useState<any[]>([])
@@ -255,9 +262,14 @@ export default function TasksPage() {
   const [viewTask, setViewTask] = useState<any>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deleteTaskId, setDeleteTaskId] = useState<any>(null)
-  const [isStatusOpen, setIsStatusOpen] = useState(false)
-  const [statusTask, setStatusTask] = useState<any>(null)
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [taskToChangeStatus, setTaskToChangeStatus] = useState<any>(null);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
+  const [taskToArchive, setTaskToArchive] = useState<any>(null);
   const [newStatus, setNewStatus] = useState("")
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [statusTask, setStatusTask] = useState<any>(null);
   const [isAssignOpen, setIsAssignOpen] = useState(false)
   const [assignTask_, setAssignTask_] = useState<any>(null)
   const [assignUserId, setAssignUserId] = useState("")
@@ -269,12 +281,12 @@ export default function TasksPage() {
   const emptyForm = {
     title: "",
     description: "",
-    entity_id: "",
-    entity_type: "" as string,
-    assignee_id: "",
+    assignee_id: undefined as number | undefined,
+    priority: "normal" as TaskPriority,
+    entity_type: "" as EntityType,
+    entity_id: undefined as number | undefined,
     due_date: "",
     reminder_at: "",
-    priority: "normal" as string,
   }
   const [formData, setFormData] = useState(emptyForm)
 
@@ -312,6 +324,7 @@ export default function TasksPage() {
       const params: any = { page: currentPage, size: limit }
       if (searchTerm) params.search = searchTerm
       if (statusFilter !== "all") params.status = statusFilter
+      if (archiveFilter !== "active") params.archive = archiveFilter
 
       // Prevent sales users from accessing full tasks list
       // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
@@ -355,6 +368,209 @@ export default function TasksPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleRefresh = () => {
+    console.log('handleRefresh called:', { 
+      user: currentUser?.role, 
+      userLoaded: !!currentUser 
+    });
+    
+    // Ensure user is loaded before refreshing
+    if (!currentUser) {
+      console.log('User not loaded, skipping refresh');
+      return;
+    }
+    
+    fetchTasks();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTaskId) return
+    try {
+      await delete_task(undefined, { id: deleteTaskId })
+      toast.success("Задача успешно удалена")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Delete error:", err)
+      toast.error(err?.message || "Ошибка при удалении задачи")
+    } finally {
+      setIsDeleteOpen(false)
+      setDeleteTaskId(null)
+    }
+  }
+
+  const handleArchiveTask = async () => {
+    if (!taskToArchive) return;
+    try {
+      await archive_task(undefined, { id: taskToArchive.id });
+      toast.success("Задача успешно заархивирована");
+      await fetchTasks();
+    } catch (err: any) {
+      console.error("Archive error:", err);
+      toast.error(err?.message || "Ошибка при архивации задачи");
+    } finally {
+      setIsArchiveDialogOpen(false);
+      setTaskToArchive(null);
+    }
+  };
+
+  const handleUnarchiveTask = async () => {
+    if (!taskToArchive) return;
+    try {
+      await unarchive_task(undefined, { id: taskToArchive.id });
+      toast.success("Задача успешно разархивирована");
+      await fetchTasks();
+    } catch (err: any) {
+      console.error("Unarchive error:", err);
+      toast.error(err?.message || "Ошибка при разархивации задачи");
+    } finally {
+      setIsUnarchiveDialogOpen(false);
+      setTaskToArchive(null);
+    }
+  };
+
+  const isAdmin = user?.role_id === 50;
+
+  const stats = {
+    total: tasks.length,
+    new: tasks.filter((t) => t.status === "new").length,
+    inProgress: tasks.filter((t) => t.status === "in_progress").length,
+    done: tasks.filter((t) => t.status === "done").length,
+  }
+
+  // Helper functions
+  const getUserLabel = (userId: string | number) => {
+    const user = users.find((u) => u.id.toString() === userId.toString())
+    return user ? (user.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : (user.company_name || user.email)) : "Неизвестен"
+  }
+
+  const getEntityLabel = (entityId: string, entityType: string) => {
+    if (entityType === "deal") {
+      const deal = deals.find((d) => d.id.toString() === entityId.toString())
+      return deal ? `Сделка #${deal.id}` : "Неизвестно"
+    }
+    if (entityType === "lead") {
+      const lead = leads.find((l) => l.id.toString() === entityId.toString())
+      return lead ? `Лид #${lead.id}` : "Неизвестно"
+    }
+    return "—"
+  }
+
+  const entityOptions = formData.entity_type === "deal"
+    ? deals.map((d) => ({ value: d.id.toString(), label: `Сделка #${d.id}` }))
+    : formData.entity_type === "lead"
+    ? leads.map((l) => ({ value: l.id.toString(), label: `Лид #${l.id}` }))
+    : []
+
+  const openCreateDialog = () => {
+    resetForm()
+    setIsFormOpen(true)
+  }
+
+  const openEditDialog = (task: any) => {
+    setSelectedTask(task)
+    setFormData({
+      title: task.title || "",
+      description: task.description || "",
+      assignee_id: task.assignee_id ? Number(task.assignee_id) : undefined,
+      priority: task.priority || "normal",
+      entity_type: task.entity_type || "",
+      entity_id: task.entity_id ? Number(task.entity_id) : undefined,
+      due_date: task.due_date || "",
+      reminder_at: task.reminder_at || "",
+    })
+    setIsFormOpen(true)
+  }
+
+  const resetForm = () => {
+    setSelectedTask(null)
+    setFormData(emptyForm)
+  }
+
+  const handleSubmitForm = async () => {
+    if (!formData.title.trim() || !formData.entity_type.trim()) return
+    try {
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        assignee_id: formData.assignee_id || 0,
+        priority: formData.priority,
+        entity_type: formData.entity_type,
+        entity_id: formData.entity_id || 0,
+        due_date: formData.due_date || "",
+        reminder_at: formData.reminder_at || "",
+      }
+      if (selectedTask) {
+        await update_task(payload, { id: selectedTask.id })
+        toast.success("Задача обновлена")
+      } else {
+        await create_task(payload)
+        toast.success("Задача создана")
+      }
+      setIsFormOpen(false)
+      resetForm()
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error saving task:", err)
+      toast.error(err?.message || "Ошибка при сохранении задачи")
+    }
+  }
+
+  const handleDelete = (taskId: any) => {
+    setDeleteTaskId(taskId)
+    setIsDeleteOpen(true)
+  }
+
+  const handleChangeStatus = async () => {
+    if (!statusTask || !newStatus) return
+    try {
+      await change_task_status({ to: newStatus }, { id: statusTask.id })
+      toast.success("Статус изменен")
+      setIsStatusOpen(false)
+      setStatusTask(null)
+      setNewStatus("")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error changing status:", err)
+      toast.error(err?.message || "Ошибка при изменении статуса")
+    }
+  }
+
+  const handleAssign = async () => {
+    if (!assignTask_ || !assignUserId) return
+    try {
+      await assign_task({ assignee_id: Number(assignUserId) }, { id: assignTask_.id })
+      toast.success("Исполнитель назначен")
+      setIsAssignOpen(false)
+      setAssignTask_(null)
+      setAssignUserId("")
+      setAssignComment("")
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error assigning task:", err)
+      toast.error(err?.message || "Ошибка при назначении")
+    }
+  }
+
+  const handleComplete = async () => {
+    if (!completeTask_) return
+    try {
+      await complete_task(undefined, { id: completeTask_.id })
+      toast.success("Задача завершена")
+      setIsCompleteOpen(false)
+      setCompleteTask_(null)
+      await fetchTasks()
+    } catch (err: any) {
+      console.error("Error completing task:", err)
+      toast.error(err?.message || "Ошибка при завершении")
+    }
+  }
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("page", page.toString())
+    router.push(`${pathname}?${params.toString()}`)
   }
 
   useEffect(() => {
@@ -491,224 +707,11 @@ export default function TasksPage() {
   }, [router])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Only fetch if user is loaded
-      if (currentUser) {
-        fetchTasks()
-      }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [searchTerm, currentPage, currentUser, statusFilter])
-
-  const handleRefresh = () => {
-    console.log('handleRefresh called:', { 
-      user: currentUser?.role, 
-      userLoaded: !!currentUser 
-    });
-    
-    // Ensure user is loaded before refreshing
-    if (!currentUser) {
-      console.log('User not loaded, skipping refresh');
-      return;
+    // Only fetch if user is loaded
+    if (currentUser) {
+      fetchTasks();
     }
-    
-    fetchTasks();
-  };
-
-  const handlePageChange = (page: number) => {
-    const params = new URLSearchParams(searchParams)
-    params.set("page", page.toString())
-    router.push(`${pathname}?${params.toString()}`)
-  }
-
-  // ─── Helpers ─────────────────────────────────────────────────
-
-  const getUserLabel = (userId: number) => {
-    const u = users.find((user) => user.id === userId || user.id?.toString() === userId?.toString())
-    return u
-      ? u.firstName
-        ? `${u.firstName} ${u.lastName || ""}`.trim()
-        : u.company_name || u.email || `Пользователь #${userId}`
-      : `Пользователь #${userId}`
-  }
-
-  const getEntityLabel = (entityId: number, entityType: string) => {
-    if (entityType === "deal") {
-      const deal = deals.find((d) => d.id === entityId || d.id?.toString() === entityId?.toString())
-      return deal ? `Сделка: ${deal.amount ? Number(deal.amount).toLocaleString() + " ₸" : "#" + deal.id}` : `Сделка #${entityId}`
-    }
-    if (entityType === "lead") {
-      const lead = leads.find((l) => l.id === entityId || l.id?.toString() === entityId?.toString())
-      return lead ? `Лид: ${lead.title || "#" + lead.id}` : `Лид #${entityId}`
-    }
-    return `#${entityId}`
-  }
-
-  const entityOptions = formData.entity_type === "deal"
-    ? deals.map((d) => ({ value: d.id.toString(), label: d.amount ? `${Number(d.amount).toLocaleString()} ₸ (#${d.id})` : `Сделка #${d.id}` }))
-    : formData.entity_type === "lead"
-      ? leads.map((l) => ({ value: l.id.toString(), label: l.title || `Лид #${l.id}` }))
-      : []
-
-  // Debug logs for dropdown options
-  console.log('Dropdown data debug:', {
-    users: users.map(u => ({ id: u.id, name: u.firstName || u.company_name || u.email })),
-    deals: deals.map(d => ({ id: d.id, amount: d.amount })),
-    leads: leads.map(l => ({ id: l.id, title: l.title })),
-    entityOptions,
-    currentUserRole: currentUser?.role,
-    entityType: formData.entity_type,
-    usersLength: users.length,
-    dealsLength: deals.length,
-    leadsLength: leads.length
-  });
-
-  // ─── CRUD Handlers ──────────────────────────────────────────
-
-  const resetForm = () => {
-    setFormData(emptyForm)
-    setSelectedTask(null)
-  }
-
-  const openCreateDialog = () => {
-    resetForm()
-    setIsFormOpen(true)
-  }
-
-  const openEditDialog = (task: any) => {
-    setSelectedTask(task)
-    setFormData({
-      title: task.title || "",
-      description: task.description || "",
-      entity_id: task.entity_id?.toString() || "",
-      entity_type: task.entity_type || "",
-      assignee_id: task.assignee_id?.toString() || "",
-      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : "",
-      reminder_at: task.reminder_at ? new Date(task.reminder_at).toISOString().slice(0, 16) : "",
-      priority: task.priority || "normal",
-    })
-    setIsFormOpen(true)
-  }
-
-  const handleSubmitForm = async () => {
-    if (!formData.title.trim()) {
-      toast.error("Заголовок обязателен")
-      return
-    }
-
-    if (!formData.entity_type.trim()) {
-      toast.error("Тип сущности обязателен")
-      return
-    }
-
-    const payload = {
-      title: formData.title,
-      description: formData.description,
-      entity_id: formData.entity_id ? Number(formData.entity_id) : undefined,
-      entity_type: formData.entity_type || undefined,
-      assignee_id: formData.assignee_id ? Number(formData.assignee_id) : undefined,
-      due_date: formData.due_date ? new Date(formData.due_date).toISOString() : undefined,
-      reminder_at: formData.reminder_at ? new Date(formData.reminder_at).toISOString() : undefined,
-      priority: formData.priority || "normal",
-    }
-
-    try {
-      if (selectedTask) {
-        await update_task(payload as any, { id: selectedTask.id })
-        toast.success("Задача обновлена")
-      } else {
-        await create_task(payload as any)
-        toast.success("Задача создана")
-      }
-      setIsFormOpen(false)
-      resetForm()
-      await fetchTasks()
-    } catch (err: any) {
-      console.error("Error saving task:", err)
-      toast.error(err?.message || "Ошибка при сохранении задачи")
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deleteTaskId) return
-    try {
-      await delete_task(undefined, { id: deleteTaskId })
-      setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId))
-      toast.success("Задача удалена")
-    } catch (err: any) {
-      console.error("Error deleting task:", err)
-      toast.error(err?.message || "Ошибка при удалении задачи")
-    } finally {
-      setIsDeleteOpen(false)
-      setDeleteTaskId(null)
-    }
-  }
-
-  const handleChangeStatus = async () => {
-    if (!statusTask || !newStatus) return
-    try {
-      console.log('Changing task status:', {
-        taskId: statusTask.id,
-        currentStatus: statusTask.status,
-        newStatus: newStatus,
-        payload: { to: newStatus }
-      })
-      await change_task_status({ to: newStatus }, { id: statusTask.id })
-      toast.success("Статус обновлен")
-      await fetchTasks()
-    } catch (err: any) {
-      console.error("Error changing status:", err)
-      toast.error(err?.message || "Ошибка при смене статуса")
-    } finally {
-      setIsStatusOpen(false)
-      setStatusTask(null)
-      setNewStatus("")
-    }
-  }
-
-  const handleAssign = async () => {
-    if (!assignTask_ || !assignUserId) return
-    try {
-      await assign_task(
-        { assignee_id: Number(assignUserId) } as any,
-        { id: assignTask_.id }
-      )
-      toast.success("Задача назначена")
-      await fetchTasks()
-    } catch (err: any) {
-      console.error("Error assigning task:", err)
-      toast.error(err?.message || "Ошибка при назначении")
-    } finally {
-      setIsAssignOpen(false)
-      setAssignTask_(null)
-      setAssignUserId("")
-      setAssignComment("")
-    }
-  }
-
-  const handleComplete = async () => {
-    if (!completeTask_) return
-    try {
-      await complete_task(undefined, { id: completeTask_.id })
-      toast.success("Задача завершена")
-      await fetchTasks()
-    } catch (err: any) {
-      console.error("Error completing task:", err)
-      toast.error(err?.message || "Ошибка")
-    } finally {
-      setIsCompleteOpen(false)
-      setCompleteTask_(null)
-    }
-  }
-
-  // ─── Statistics ──────────────────────────────────────────────
-
-  const stats = {
-    total: totalTasks,
-    new: tasks.filter((t) => t.status === "new").length,
-    inProgress: tasks.filter((t) => t.status === "in_progress").length,
-    done: tasks.filter((t) => t.status === "done").length,
-  }
+  }, [currentPage, statusFilter, archiveFilter, currentUser]);
 
   // ─── Skeleton Loading ────────────────────────────────────────
 
@@ -826,6 +829,12 @@ export default function TasksPage() {
                 ]}
               />
             </div>
+            <div className="w-full sm:w-48 overflow-visible">
+              <ArchiveFilter
+                value={archiveFilter}
+                onChange={setArchiveFilter}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -863,6 +872,7 @@ export default function TasksPage() {
                     const taskPriority = (task.priority || "normal") as TaskPriority
                     const allowedTransitions = statusTransitions[taskStatus] || []
                     const isFinal = taskStatus === "done" || taskStatus === "cancelled"
+                    const isArchived = (task as any).archived || false
 
                     return (
                       <TableRow key={task.id}>
@@ -894,9 +904,14 @@ export default function TasksPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge className={`${statusColors[taskStatus] || statusColors.new} text-xs`}>
-                            {statusLabels[taskStatus] || taskStatus}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge className={`${statusColors[taskStatus] || statusColors.new} text-xs`}>
+                              {statusLabels[taskStatus] || taskStatus}
+                            </Badge>
+                            {isArchived && (
+                              <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -918,7 +933,7 @@ export default function TasksPage() {
                                 Редактировать
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {!isFinal && allowedTransitions.length > 0 && (
+                              {!isFinal && !isArchived && allowedTransitions.length > 0 && (
                                 <DropdownMenuItem onClick={() => {
                                   setStatusTask(task)
                                   setNewStatus("")
@@ -937,7 +952,7 @@ export default function TasksPage() {
                                 <UserPlus className="h-4 w-4 mr-2" />
                                 Назначить
                               </DropdownMenuItem>
-                              {taskStatus === "in_progress" && (
+                              {taskStatus === "in_progress" && !isArchived && (
                                 <DropdownMenuItem onClick={() => {
                                   setCompleteTask_(task)
                                   setIsCompleteOpen(true)
@@ -947,16 +962,35 @@ export default function TasksPage() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setDeleteTaskId(task.id)
-                                  setIsDeleteOpen(true)
-                                }}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Удалить
-                              </DropdownMenuItem>
+                              {isArchived ? (
+                                <DropdownMenuItem onClick={() => {
+                                  setTaskToArchive(task)
+                                  setIsUnarchiveDialogOpen(true)
+                                }}>
+                                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                                  Разархивировать
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => {
+                                  setTaskToArchive(task)
+                                  setIsArchiveDialogOpen(true)
+                                }}>
+                                  <Archive className="h-4 w-4 mr-2" />
+                                  Архивировать
+                                </DropdownMenuItem>
+                              )}
+                              {isAdmin && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setDeleteTaskId(task.id)
+                                    setIsDeleteOpen(true)
+                                  }}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Удалить
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -1012,8 +1046,8 @@ export default function TasksPage() {
             <div className="space-y-2">
               <Label>Исполнитель</Label>
               <ComboboxSelect
-                value={formData.assignee_id}
-                onChange={(val) => setFormData({ ...formData, assignee_id: val })}
+                value={formData.assignee_id?.toString() || ""}
+                onChange={(val) => setFormData({ ...formData, assignee_id: val ? Number(val) : undefined })}
                 placeholder="Выберите исполнителя"
                 searchPlaceholder="Поиск сотрудника..."
                 options={users.map((u) => ({
@@ -1027,7 +1061,7 @@ export default function TasksPage() {
               <Label>Приоритет</Label>
               <CustomSelect
                 value={formData.priority}
-                onChange={(val) => setFormData({ ...formData, priority: val })}
+                onChange={(val) => setFormData({ ...formData, priority: val as TaskPriority })}
                 placeholder="Выберите приоритет"
                 options={[
                   { value: "low", label: "Низкий" },
@@ -1042,7 +1076,7 @@ export default function TasksPage() {
               <Label>Тип сущности <span className="text-red-500">*</span></Label>
               <CustomSelect
                 value={formData.entity_type}
-                onChange={(val) => setFormData({ ...formData, entity_type: val, entity_id: "" })}
+                onChange={(val) => setFormData({ ...formData, entity_type: val as EntityType, entity_id: undefined })}
                 placeholder="Выберите тип"
                 options={[
                   { value: "deal", label: "Сделка" },
@@ -1054,8 +1088,8 @@ export default function TasksPage() {
             <div className="space-y-2">
               <Label>Объект ({formData.entity_type === "deal" ? "Сделка" : formData.entity_type === "lead" ? "Лид" : "—"})</Label>
               <ComboboxSelect
-                value={formData.entity_id}
-                onChange={(val) => setFormData({ ...formData, entity_id: val })}
+                value={formData.entity_id?.toString() || ""}
+                onChange={(val) => setFormData({ ...formData, entity_id: val ? Number(val) : undefined })}
                 placeholder={formData.entity_type ? "Выберите объект" : "Сначала выберите тип"}
                 searchPlaceholder="Поиск..."
                 emptyText="Ничего не найдено"
@@ -1275,6 +1309,36 @@ export default function TasksPage() {
             <AlertDialogAction onClick={handleComplete} className="bg-green-600 hover:bg-green-700">
               Завершить
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Архивировать задачу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет перемещена в архив. Её можно восстановить позже.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveTask}>Архивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isUnarchiveDialogOpen} onOpenChange={setIsUnarchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Разархивировать задачу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет возвращена из архива в активный список.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnarchiveTask}>Разархивировать</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

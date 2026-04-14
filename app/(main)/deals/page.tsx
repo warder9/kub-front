@@ -60,11 +60,14 @@ import {
   Trash2,
   RefreshCw,
   Eye,
+  Archive,
+  ArchiveRestore,
   ChevronUp,
   ChevronsUpDown,
   Check,
 } from "lucide-react";
 import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth";
+import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { getMe } from "@/src/api/auth.api";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +96,7 @@ export default function DealsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
   const [deals, setDeals] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,6 +112,9 @@ export default function DealsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
+  const [dealToArchive, setDealToArchive] = useState<any>(null);
 
   // Current deal states
   const [currentDeal, setCurrentDeal] = useState<any>(null);
@@ -215,6 +222,7 @@ export default function DealsPage() {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (archiveFilter !== "active") params.archive = archiveFilter;
 
       // Get current user data directly to ensure we have the latest role
       const currentUser = getCurrentUser();
@@ -536,7 +544,7 @@ export default function DealsPage() {
     if (user) {
       fetchDeals();
     }
-  }, [currentPage, statusFilter, user]);
+  }, [currentPage, statusFilter, archiveFilter, user]);
 
   // Debug state changes
   useEffect(() => {
@@ -561,7 +569,7 @@ export default function DealsPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, user]);
+  }, [searchTerm, archiveFilter, user]);
 
   // Reset new deal form
   const resetNewDealForm = () => {
@@ -653,6 +661,40 @@ export default function DealsPage() {
     });
     setIsStatusDialogOpen(true);
   };
+
+  const handleArchiveDeal = async () => {
+    if (!dealToArchive) return;
+    try {
+      const { archive_deal } = await import("@/src/api/deals.api");
+      await archive_deal(undefined, { id: dealToArchive.id });
+      toast.success("Сделка успешно заархивирована");
+      await fetchDeals();
+    } catch (err: any) {
+      console.error("Ошибка архивации сделки:", err);
+      toast.error(err?.message || "Ошибка при архивации");
+    } finally {
+      setIsArchiveDialogOpen(false);
+      setDealToArchive(null);
+    }
+  };
+
+  const handleUnarchiveDeal = async () => {
+    if (!dealToArchive) return;
+    try {
+      const { unarchive_deal } = await import("@/src/api/deals.api");
+      await unarchive_deal(undefined, { id: dealToArchive.id });
+      toast.success("Сделка успешно разархивирована");
+      await fetchDeals();
+    } catch (err: any) {
+      console.error("Ошибка разархивации сделки:", err);
+      toast.error(err?.message || "Ошибка при разархивации");
+    } finally {
+      setIsUnarchiveDialogOpen(false);
+      setDealToArchive(null);
+    }
+  };
+
+  const isAdmin = user?.role_id === 50;
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -1043,6 +1085,12 @@ export default function DealsPage() {
                 ]}
               />
             </div>
+            <div className="w-full sm:w-48 overflow-visible">
+              <ArchiveFilter
+                value={archiveFilter}
+                onChange={setArchiveFilter}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1078,114 +1126,146 @@ export default function DealsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  deals.map((deal) => (
-                    <TableRow key={deal.id}>
-                      <TableCell className="font-medium">#{deal.id}</TableCell>
-                      <TableCell>
-                        {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
-                      </TableCell>
-                      <TableCell>
-                        {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">
-                          {Number(deal.amount || 0).toLocaleString()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{deal.currency || "KZT"}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusBadge(deal.status)}
-                          <div className="w-24">
-                            <Progress
-                              value={
-                                deal.status === "new" ? 20 :
-                                  deal.status === "in_progress" ? 50 :
-                                    deal.status === "won" ? 100 :
-                                      deal.status === "lost" ? 100 :
-                                        deal.status === "cancelled" ? 100 : 10
-                              }
-                              className={`h-2 ${getStatusColor(deal.status)}`}
-                            />
+                  deals.map((deal) => {
+                    const isArchived = (deal as any).archived || false;
+                    return (
+                      <TableRow key={deal.id}>
+                        <TableCell className="font-medium">#{deal.id}</TableCell>
+                        <TableCell>
+                          {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
+                        </TableCell>
+                        <TableCell>
+                          {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">
+                            {Number(deal.amount || 0).toLocaleString()}
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {deal.created_at ? (
-                          <div className="flex items-center text-sm">
-                            <Calendar className="h-3 w-3 mr-1 text-gray-400" />
-                            {format(new Date(deal.created_at), "dd.MM.yyyy", { locale: ru })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{deal.currency || "KZT"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(deal.status)}
+                            {isArchived && (
+                              <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                            )}
+                            <div className="w-24">
+                              <Progress
+                                value={
+                                  deal.status === "new" ? 20 :
+                                    deal.status === "in_progress" ? 50 :
+                                      deal.status === "won" ? 100 :
+                                        deal.status === "lost" ? 100 :
+                                          deal.status === "cancelled" ? 100 : 10
+                                }
+                                className={`h-2 ${getStatusColor(deal.status)}`}
+                              />
+                            </div>
                           </div>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openViewDialog(deal)}
-                            title="Просмотр"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {canWrite && (
+                        </TableCell>
+                        <TableCell>
+                          {deal.created_at ? (
+                            <div className="flex items-center text-sm">
+                              <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                              {format(new Date(deal.created_at), "dd.MM.yyyy", { locale: ru })}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => openEditDialog(deal)}
-                              title="Редактировать"
+                              onClick={() => openViewDialog(deal)}
+                              title="Просмотр"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          )}
-                          {!isFinalStatus(deal.status) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openStatusDialog(deal)}
-                              title="Изменить статус"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                            {canWrite && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Удалить"
+                                onClick={() => openEditDialog(deal)}
+                                title="Редактировать"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Вы уверены, что хотите удалить сделку #{deal.id}?
-                                  Это действие нельзя отменить.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteDeal(deal.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Удалить
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            )}
+                            {!isFinalStatus(deal.status) && !isArchived && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openStatusDialog(deal)}
+                                title="Изменить статус"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {isArchived ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDealToArchive(deal);
+                                  setIsUnarchiveDialogOpen(true);
+                                }}
+                                title="Разархивировать"
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDealToArchive(deal);
+                                  setIsArchiveDialogOpen(true);
+                                }}
+                                title="Архивировать"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Удалить"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Запись будет удалена без возможности восстановления.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteDeal(deal.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Удалить
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -1629,6 +1709,36 @@ export default function DealsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog >
+
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Архивировать сделку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет перемещена в архив. Её можно восстановить позже.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveDeal}>Архивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isUnarchiveDialogOpen} onOpenChange={setIsUnarchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Разархивировать сделку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет возвращена из архива в активный список.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnarchiveDeal}>Разархивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
