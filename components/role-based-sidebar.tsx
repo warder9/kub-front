@@ -56,6 +56,12 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
+      title: "Wazzup",
+      href: "/whatsapp",
+      icon: MessageCircle,
+      permissions: [],
+    },
+    {
       title: "Роли",
       href: "/roles",
       icon: Shield,
@@ -100,7 +106,7 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
-      title: "WhatsApp",
+      title: "Wazzup",
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],
@@ -150,7 +156,7 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
-      title: "WhatsApp",
+      title: "Wazzup",
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],
@@ -200,7 +206,7 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
-      title: "WhatsApp",
+      title: "Wazzup",
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],
@@ -220,7 +226,7 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
-      title: "WhatsApp",
+      title: "Wazzup",
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],
@@ -264,7 +270,7 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
     {
-      title: "WhatsApp",
+      title: "Wazzup",
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],

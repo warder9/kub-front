@@ -2,7 +2,7 @@ import { api } from './index';
 
 export interface WazzupSetupRequest {
   webhooks_base_url: string;
-  api_key: string;
+  api_key?: string; // Optional - backend uses default if not provided
   enabled: boolean;
 }
 
@@ -13,9 +13,7 @@ export interface WazzupSetupResponse {
 }
 
 export interface WazzupIframeRequest {
-  phone?: string;
-  lead_id?: number;
-  client_id?: number;
+  // Empty body as per technical specification
 }
 
 export interface WazzupIframeResponse {
@@ -42,8 +40,15 @@ export const setupWazzup = async (data: WazzupSetupRequest): Promise<WazzupSetup
 };
 
 // Get Wazzup iframe URL for chat
-export const getWazzupIframe = async (data: WazzupIframeRequest): Promise<WazzupIframeResponse> => {
-  const response = await api.post('/integrations/wazzup/iframe', data);
+// Sends empty JSON body {} as per technical specification
+export const getWazzupIframe = async (): Promise<WazzupIframeResponse> => {
+  const response = await api.post('/integrations/wazzup/iframe', {});
+  return response.data;
+};
+
+// Send message via Wazzup
+export const sendWazzupMessage = async (chatId: string, text: string): Promise<{ message_id: string }> => {
+  const response = await api.post('/integrations/wazzup/send', { chat_id: chatId, text });
   return response.data;
 };
 

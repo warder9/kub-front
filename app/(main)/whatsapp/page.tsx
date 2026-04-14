@@ -48,11 +48,12 @@ import {
   UserCheck,
   ArrowRight,
   Settings,
-  RefreshCw
+  RefreshCw,
+  XCircle
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
-import { getWazzupIframe } from "@/src/api/integrations_wazzup.api";
+import { getWazzupIframe, setupWazzup, sendWazzupMessage } from "@/src/api/integrations_wazzup.api";
 import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -84,15 +85,36 @@ interface WhatsAppMessage {
   senderName?: string;
 }
 
+// Widget state types
+type WidgetState = 'loading' | 'ready' | 'error' | 'not_connected' | 'service_unavailable';
+type WidgetError = { type: '404' | '502' | 'network' | 'unknown'; message: string };
+
+// Session management constants
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+const SOFT_REFRESH_DURATION_MS = 7.5 * 60 * 60 * 1000; // 7.5 hours (soft refresh before expiration)
+
 export default function WhatsAppPage() {
   const [selectedDialog, setSelectedDialog] = useState<WhatsAppDialog | null>(null);
   const [message, setMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [iframeUrl, setIframeUrl] = useState<string>("");
-  const [isLoadingIframe, setIsLoadingIframe] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Widget state management
+  const [widgetState, setWidgetState] = useState<WidgetState>('loading');
+  const [widgetError, setWidgetError] = useState<WidgetError | null>(null);
+  const [sessionReceivedAt, setSessionReceivedAt] = useState<number | null>(null);
+  const [isManualRefresh, setIsManualRefresh] = useState(false);
+
+  // Setup form state
+  const [setupForm, setSetupForm] = useState({
+    webhooks_base_url: 'https://api.kubcrm.kz',
+    enabled: true
+  });
+  const [isSetupLoading, setIsSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   // Mock data for dialogs
   const [dialogs, setDialogs] = useState<WhatsAppDialog[]>([]);
@@ -105,7 +127,7 @@ export default function WhatsAppPage() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
 
   const currentUser = getCurrentUser();
-  const [isChatVisible, setIsChatVisible] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(true); // Show chat by default
 
   // Fetch WhatsApp dialogs
   const fetchDialogs = async () => {
@@ -127,29 +149,109 @@ export default function WhatsAppPage() {
     fetchDialogs();
   }, []);
 
-  const loadWhatsAppChat = async (dialog: WhatsAppDialog) => {
-    setIsLoadingIframe(true);
+  // Load widget: fetch iframe URL and manage session
+  const loadWidget = useCallback(async () => {
+    setWidgetState('loading');
+    setWidgetError(null);
+    setIsManualRefresh(false);
+
     try {
-      const response = await getWazzupIframe({
-        phone: dialog.phone,
-        lead_id: dialog.leadId,
-        client_id: dialog.clientId
-      });
-      setIframeUrl(response.iframe_url);
-    } catch (error) {
-      console.error("Failed to load WhatsApp chat:", error);
+      const response = await getWazzupIframe();
+      console.log('Wazzup iframe response:', response);
+      setIframeUrl(response.iframe_url || response.url);
+      setSessionReceivedAt(Date.now());
+      setWidgetState('ready');
+      console.log('Widget state set to ready, iframe URL:', response.iframe_url || response.url);
+    } catch (error: any) {
+      console.error("Failed to load Wazzup widget:", error);
+
+      // Handle different error types
+      if (error.response?.status === 404) {
+        setWidgetError({ type: '404', message: 'Интеграция Wazzup не подключена' });
+        setWidgetState('not_connected');
+      } else if (error.response?.status === 502 || error.response?.status === 503) {
+        setWidgetError({ type: '502', message: 'Wazzup временно недоступен' });
+        setWidgetState('service_unavailable');
+      } else if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
+        setWidgetError({ type: 'network', message: 'Ошибка сети. Проверьте подключение к интернету.' });
+        setWidgetState('error');
+      } else {
+        setWidgetError({ type: 'unknown', message: error.message || 'Не удалось загрузить виджет' });
+        setWidgetState('error');
+      }
+    }
+  }, []);
+
+  // Refresh widget: re-fetch iframe URL and update iframe
+  const refreshWidget = useCallback(async () => {
+    setIsManualRefresh(true);
+    await loadWidget();
+  }, [loadWidget]);
+
+  // Load widget when component mounts
+  useEffect(() => {
+    loadWidget();
+  }, [loadWidget]);
+
+  // Auto-refresh before session expiration (soft refresh at 7.5 hours)
+  useEffect(() => {
+    if (!sessionReceivedAt || widgetState !== 'ready') return;
+
+    const timeUntilSoftRefresh = SOFT_REFRESH_DURATION_MS - (Date.now() - sessionReceivedAt);
+
+    if (timeUntilSoftRefresh <= 0) {
+      // Session already expired, refresh immediately
+      refreshWidget();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      console.log('Soft refresh: session approaching expiration');
+      refreshWidget();
+    }, timeUntilSoftRefresh);
+
+    return () => clearTimeout(timer);
+  }, [sessionReceivedAt, widgetState, refreshWidget]);
+
+  // Handle iframe load errors
+  const handleIframeError = useCallback(() => {
+    console.error('Iframe loading error detected');
+    // Attempt to refresh the widget
+    refreshWidget();
+  }, [refreshWidget]);
+
+  const loadWhatsAppChat = async (dialog: WhatsAppDialog) => {
+    // This function is now deprecated - we use loadWidget instead
+    // which doesn't require dialog-specific parameters per spec
+    await loadWidget();
+  };
+
+  // Handle setup form submission
+  const handleSetup = async () => {
+    setIsSetupLoading(true);
+    setSetupError(null);
+
+    try {
+      const response = await setupWazzup(setupForm);
+      console.log('Wazzup setup successful:', response);
+      setIsSetupModalOpen(false);
+
+      // Force widget reload with a small delay to ensure backend has processed
+      setTimeout(async () => {
+        await loadWidget();
+      }, 500);
+    } catch (error: any) {
+      console.error('Failed to setup Wazzup:', error);
+      setSetupError(error.message || 'Не удалось настроить интеграцию');
     } finally {
-      setIsLoadingIframe(false);
+      setIsSetupLoading(false);
     }
   };
 
   useEffect(() => {
-    if (selectedDialog) {
-      loadWhatsAppChat(selectedDialog);
-      // Reset messages when dialog changes
-      setMessages([]);
-    }
-  }, [selectedDialog]);
+    // Load widget when component mounts or when selectedDialog changes
+    loadWidget();
+  }, [loadWidget]);
 
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return "";
@@ -195,10 +297,16 @@ export default function WhatsAppPage() {
 
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedDialog) return;
-    
-    // TODO: Implement actual message sending via Wazzup API
-    // For now, just clear the input
-    setMessage("");
+
+    try {
+      await sendWazzupMessage(selectedDialog.phone, message);
+      setMessage("");
+      // Optionally add the message to local state for immediate feedback
+      // The actual message will appear in the iframe
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      // Show error to user
+    }
   };
 
   useEffect(() => {
@@ -207,158 +315,14 @@ export default function WhatsAppPage() {
 
   return (
     <div className="flex h-screen">
-      {/* Dialog List */}
-      <div className={`
-        ${isChatVisible ? 'hidden' : 'flex'}
-        w-full flex-col bg-white border-r border-gray-200
-        md:flex md:w-80
-    `}>
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                <MessageCircle className="h-5 w-5 text-white" />
-              </div>
-              <h2 className="text-xl font-semibold">WhatsApp</h2>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button size="sm" variant="ghost" onClick={() => setIsSetupModalOpen(true)}>
-                <Settings className="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="ghost">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Поиск по имени или номеру..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {dialogsLoading && <div className="py-4 text-center">Загрузка диалогов...</div>}
-            {dialogsError && (
-              <div className="py-2 text-red-600 text-center">{dialogsError}</div>
-            )}
-            {!dialogsLoading && !dialogsError && (
-              dialogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 text-center mt-10">
-                  <MessageSquare className="h-10 w-10 text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">Диалогов пока нет</p>
-                  <p className="text-sm text-gray-400">Настройте интеграцию с WhatsApp для начала работы</p>
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => setIsSetupModalOpen(true)}
-                  >
-                    Настроить интеграцию
-                  </Button>
-                </div>
-              ) : filteredDialogs.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">Диалоги не найдены</div>
-              ) : (
-                filteredDialogs.map((dialog) => (
-                <div
-                  key={dialog.id}
-                  onClick={() => {
-                    setSelectedDialog(dialog);
-                    setIsChatVisible(true);
-                  }}
-                  className={`p-3 rounded-xl cursor-pointer transition-colors ${selectedDialog?.id === dialog.id
-                    ? "bg-green-50"
-                    : "hover:bg-gray-50"
-                    }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={dialog.avatar} />
-                        <AvatarFallback>
-                          <UserIcon className="h-5 w-5" />
-                        </AvatarFallback>
-                      </Avatar>
-                      {dialog.isOnline && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-green-500" />
-                      )}
-                      <div className="absolute -top-1 -right-1">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs" style={{ fontSize: '8px' }}>WA</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-medium text-sm truncate">
-                          {dialog.name || dialog.phone}
-                        </h3>
-                        <span className="text-xs text-gray-500">
-                          {dialog.lastMessageTime}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600 truncate">
-                          {dialog.lastMessage || "Нет сообщений"}
-                        </p>
-                        <div className="flex items-center space-x-1">
-                          {dialog.unreadCount > 0 && (
-                            <Badge variant="destructive" className="text-xs">
-                              {dialog.unreadCount}
-                            </Badge>
-                          )}
-                          {dialog.assignedTo && (
-                            <Badge variant="secondary" className="text-xs">
-                              <UserCheck className="h-3 w-3 mr-1" />
-                              {dialog.assignedToName?.split(' ')[0]}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-xs text-gray-500">{dialog.phone}</span>
-                        {dialog.leadId && (
-                          <Badge variant="outline" className="text-xs">
-                            <Button size="sm" variant="ghost" className="h-auto p-0" onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToCRM('lead', dialog.leadId!);
-                            }}>
-                              Лид {dialog.leadId}
-                            </Button>
-                          </Badge>
-                        )}
-                        {dialog.clientId && (
-                          <Badge variant="outline" className="text-xs">
-                            <Button size="sm" variant="ghost" className="h-auto p-0" onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToCRM('client', dialog.clientId!);
-                            }}>
-                              Клиент {dialog.clientId}
-                            </Button>
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )))
-            )}
-          </div>
-        </ScrollArea>
+      {/* Dialog List - completely hidden for Wazzup since iframe shows dialogs internally */}
+      <div className="hidden">
       </div>
 
       {/* Chat Area */}
-      <div className={`
-        ${isChatVisible ? 'flex' : 'hidden'}
-        flex-1 flex-col
-        md:flex
-    `}>
-        {selectedDialog ? (
+      <div className="flex flex-1 flex-col">
+        {/* Always show widget when ready, or show placeholder when not */}
+        {widgetState === 'ready' || widgetState === 'loading' || widgetState === 'error' || widgetState === 'not_connected' || widgetState === 'service_unavailable' ? (
           <>
             {/* Chat Header */}
             <div className="p-4 bg-white border-b border-gray-200">
@@ -370,148 +334,121 @@ export default function WhatsAppPage() {
                     </svg>
                   </Button>
                   <div className="relative">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={selectedDialog.avatar} />
-                      <AvatarFallback>
-                        <UserIcon className="h-5 w-5" />
-                      </AvatarFallback>
-                    </Avatar>
-                    {selectedDialog.isOnline && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-green-500" />
-                    )}
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                      <MessageCircle className="h-5 w-5 text-white" />
+                    </div>
                   </div>
                   <div>
-                    <h3 className="font-medium">{selectedDialog.name || selectedDialog.phone}</h3>
-                    <p className="text-sm text-gray-600 flex items-center space-x-2">
-                      <span>{selectedDialog.phone}</span>
-                      {selectedDialog.isOnline && <span className="text-green-600">• В сети</span>}
-                      {selectedDialog.assignedTo && (
-                        <span className="text-blue-600">
-                          • Ответственный: {selectedDialog.assignedToName}
-                        </span>
-                      )}
+                    <h3 className="font-medium">Wazzup</h3>
+                    <p className="text-sm text-gray-600">
+                      {widgetState === 'ready' ? 'Подключено' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button size="sm" variant="ghost">
-                    <Phone className="h-4 w-4" />
+                  {/* Manual refresh button */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={refreshWidget}
+                    title="Обновить Wazzup"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isManualRefresh ? 'animate-spin' : ''}`} />
                   </Button>
-                  <Button size="sm" variant="ghost">
-                    <Video className="h-4 w-4" />
+                  <Button size="sm" variant="ghost" onClick={() => setIsSetupModalOpen(true)}>
+                    <Settings className="h-4 w-4" />
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="ghost">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => setIsAssignModalOpen(true)}>
-                        <UserCheck className="h-4 w-4 mr-2" />
-                        Назначить ответственного
-                      </DropdownMenuItem>
-                      {selectedDialog.leadId && (
-                        <DropdownMenuItem onClick={() => navigateToCRM('lead', selectedDialog.leadId!)}>
-                          <ArrowRight className="h-4 w-4 mr-2" />
-                          Перейти к лиду
-                        </DropdownMenuItem>
-                      )}
-                      {selectedDialog.clientId && (
-                        <DropdownMenuItem onClick={() => navigateToCRM('client', selectedDialog.clientId!)}>
-                          <ArrowRight className="h-4 w-4 mr-2" />
-                          Перейти к клиенту
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem className="text-red-500">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Архивировать диалог
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
             </div>
 
             {/* Messages or Iframe */}
             <div className="flex-1 bg-gray-50">
-              {iframeUrl ? (
-                <iframe
-                  src={iframeUrl}
-                  className="w-full h-full border-0"
-                  title="WhatsApp Chat"
-                  onLoad={() => setIsLoadingIframe(false)}
-                />
-              ) : isLoadingIframe ? (
+              {widgetState === 'loading' && (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <RefreshCw className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-4" />
-                    <p className="text-gray-600">Загрузка WhatsApp...</p>
+                    <p className="text-gray-600">Загрузка Wazzup...</p>
                   </div>
                 </div>
-              ) : (
-                <ScrollArea className="h-full p-4">
-                  <div className="space-y-4 max-w-4xl mx-auto">
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${msg.isIncoming ? 'items-start' : 'items-end'} mb-2`}
-                      >
-                        {msg.isIncoming && (
-                          <span className="text-xs text-muted-foreground ml-2 mb-1">
-                            {msg.senderName}
-                          </span>
-                        )}
-                        <div
-                          className={`max-w-[85%] md:max-w-[70%] px-3 py-2 rounded-2xl shadow-sm relative ${msg.isIncoming
-                            ? 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'
-                            : 'bg-green-600 text-white rounded-tr-none'
-                            }`}
-                        >
-                          <p className="whitespace-pre-wrap break-words leading-relaxed text-sm pr-12 pb-1">
-                            {msg.text}
-                          </p>
-                          <div className="flex justify-end items-center gap-1 absolute bottom-1 right-2">
-                            <span className={`text-[10px] ${msg.isIncoming ? "text-gray-400" : "text-green-100"}`}>
-                              {msg.timestamp}
-                            </span>
-                            {!msg.isIncoming && getStatusIcon(msg.status)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
               )}
-            </div>
 
-            {/* Message Input */}
-            <div className="p-4 bg-white border-t border-gray-200">
-              <div className="flex items-center space-x-2">
-                <Button size="sm" variant="ghost">
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <div className="flex-1 relative">
-                  <Input
-                    placeholder="Введите сообщение..."
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="pr-10"
-                    disabled={!!iframeUrl}
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2"
-                  >
-                    <Smile className="h-4 w-4" />
-                  </Button>
+              {widgetState === 'ready' && (
+                <iframe
+                  src={iframeUrl}
+                  className="w-full h-full border-0"
+                  title="Wazzup Chat"
+                  onError={handleIframeError}
+                />
+              )}
+
+              {widgetState === 'not_connected' && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <XCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Интеграция не подключена
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {widgetError?.message || 'Wazzup интеграция не настроена'}
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsSetupModalOpen(true)}
+                      >
+                        Настроить интеграцию
+                      </Button>
+                      <Button
+                        onClick={refreshWidget}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Попробовать снова
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <Button onClick={handleSendMessage} disabled={!message.trim() || !!iframeUrl}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
+              )}
+
+              {widgetState === 'service_unavailable' && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <AlertCircle className="h-12 w-12 text-orange-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Сервис временно недоступен
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {widgetError?.message || 'Wazzup временно недоступен'}
+                    </p>
+                    <Button
+                      onClick={refreshWidget}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Повторить
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {widgetState === 'error' && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Ошибка загрузки
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {widgetError?.message || 'Не удалось загрузить виджет'}
+                    </p>
+                    <Button
+                      onClick={refreshWidget}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Повторить
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -521,10 +458,10 @@ export default function WhatsAppPage() {
                 <MessageCircle className="h-8 w-8 text-green-600" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                WhatsApp интеграция
+                Wazzup интеграция
               </h3>
               <p className="text-gray-600">
-                Выберите диалог для начала общения
+                Загрузка...
               </p>
             </div>
           </div>
@@ -568,26 +505,56 @@ export default function WhatsAppPage() {
       <Dialog open={isSetupModalOpen} onOpenChange={setIsSetupModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Настройка WhatsApp интеграции</DialogTitle>
+            <DialogTitle>Настройка Wazzup интеграции</DialogTitle>
             <DialogDescription>
-              Настройте подключение к Wazzup для работы с WhatsApp
+              Настройте подключение к Wazzup
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
+            {setupError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                {setupError}
+              </div>
+            )}
             <div>
-              <Label htmlFor="webhook-url">Webhook URL</Label>
-              <Input id="webhook-url" placeholder="https://your-domain.com/webhooks/wazzup" />
+              <Label htmlFor="webhook-url">Webhook Base URL</Label>
+              <Input
+                id="webhook-url"
+                placeholder="https://api.kubcrm.kz"
+                value={setupForm.webhooks_base_url}
+                onChange={(e) => setSetupForm({ ...setupForm, webhooks_base_url: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Базовый URL для вебхуков (без пути к вебхуку)
+              </p>
             </div>
-            <div>
-              <Label htmlFor="api-key">API Key</Label>
-              <Input id="api-key" type="password" placeholder="Введите API ключ Wazzup" />
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="enabled"
+                checked={setupForm.enabled}
+                onChange={(e) => setSetupForm({ ...setupForm, enabled: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <Label htmlFor="enabled" className="cursor-pointer">
+                Включить интеграцию
+              </Label>
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="ghost">Отмена</Button>
+              <Button variant="ghost" disabled={isSetupLoading}>Отмена</Button>
             </DialogClose>
-            <Button>Сохранить настройки</Button>
+            <Button onClick={handleSetup} disabled={isSetupLoading}>
+              {isSetupLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Настройка...
+                </>
+              ) : (
+                'Сохранить настройки'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
