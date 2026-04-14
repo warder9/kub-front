@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -38,6 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Toaster } from "@/components/ui/sonner";
 import {
   Popover,
   PopoverContent,
@@ -446,14 +448,14 @@ export default function LeadsPage() {
     try {
       await leadsApi.delete_lead(undefined, { id: leadId });
       setLeads((prev) => (prev || []).filter((l) => l.id !== leadId));
-      alert('Лид успешно удален');
+      toast.success("Лид успешно удален");
     } catch (err: any) {
       console.error("Ошибка удаления лида:", err);
       const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error';
-      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || err?.response?.status === 500) {
-        alert('Невозможно удалить лид. Возможно, он уже конвертирован в сделку или имеет связанные записи. Проверьте статус лида.');
+      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || errorMsg.includes('violates') || err?.response?.status === 500) {
+        toast.error("Невозможно удалить лид, так как он связан со сделками. Сначала удалите связанные сделки или используйте архивацию.");
       } else {
-        alert(`Ошибка удаления лида: ${errorMsg}`);
+        toast.error(`Ошибка удаления лида: ${errorMsg}`);
       }
     }
   };
@@ -1153,6 +1155,7 @@ export default function LeadsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Toaster />
     </>
   );
 }

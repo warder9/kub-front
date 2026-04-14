@@ -861,11 +861,20 @@ useEffect(() => {
       void fetchClients(); // Refresh list
     } catch (err: any) {
       console.error("Delete client error", err);
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: err?.message || "Не удалось удалить клиента.",
-      });
+      const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error';
+      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || errorMsg.includes('violates') || err?.response?.status === 500) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Невозможно удалить клиента, так как он связан со сделками или документами. Сначала удалите связанные записи или используйте архивацию.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: err?.message || "Не удалось удалить клиента.",
+        });
+      }
     } finally {
       setClientToDelete(null);
     }

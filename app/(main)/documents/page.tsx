@@ -584,7 +584,12 @@ export default function DocumentsPage() {
             await fetchDocuments()
         } catch (err: any) {
             console.error("Delete error:", err)
-            toast.error(err?.message || "Ошибка при удалении документа")
+            const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error'
+            if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || errorMsg.includes('violates') || err?.response?.status === 500) {
+                toast.error("Невозможно удалить документ, так как он связан с другими записями. Сначала удалите связанные записи или используйте архивацию.")
+            } else {
+                toast.error(`Ошибка при удалении документа: ${errorMsg}`)
+            }
         } finally {
             setActionLoading(false)
             setIsDeleteOpen(false)

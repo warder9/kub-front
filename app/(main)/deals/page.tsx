@@ -837,7 +837,12 @@ export default function DealsPage() {
       toast.success("Сделка успешно удалена");
     } catch (err: any) {
       console.error("Error deleting deal:", err);
-      toast.error(err?.message || "Ошибка при удалении сделки");
+      const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error';
+      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || errorMsg.includes('violates') || err?.response?.status === 500) {
+        toast.error("Невозможно удалить сделку, так как она связана с другими записями (документы, задачи). Сначала удалите связанные записи или используйте архивацию.");
+      } else {
+        toast.error(`Ошибка при удалении сделки: ${errorMsg}`);
+      }
     } finally {
       setIsLoading(false);
     }

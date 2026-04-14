@@ -393,7 +393,12 @@ export default function TasksPage() {
       await fetchTasks()
     } catch (err: any) {
       console.error("Delete error:", err)
-      toast.error(err?.message || "Ошибка при удалении задачи")
+      const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error'
+      if (errorMsg.includes('foreign key') || errorMsg.includes('constraint') || errorMsg.includes('violates') || err?.response?.status === 500) {
+        toast.error("Невозможно удалить задачу, так как она связана с другими записями. Сначала удалите связанные записи или используйте архивацию.")
+      } else {
+        toast.error(`Ошибка при удалении задачи: ${errorMsg}`)
+      }
     } finally {
       setIsDeleteOpen(false)
       setDeleteTaskId(null)
