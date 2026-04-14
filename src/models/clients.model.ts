@@ -72,6 +72,7 @@ export interface Client {
     spouse_contacts?: string;
     has_children?: boolean;
     children_list?: any;
+    education_level?: string;
     education?: string;
     job?: string;
     trips_last5_years?: string;
@@ -195,6 +196,7 @@ export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at
     spouse_contacts?: string;
     has_children?: boolean;
     children_list?: any;
+    education_level?: string;
     education?: string;
     job?: string;
     trips_last5_years?: string;

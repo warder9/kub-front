@@ -801,6 +801,7 @@ useEffect(() => {
       spouse_contacts: hasIndividualProfile ? client.individual_profile?.spouse_contacts || "" : client.spouse_contacts || "",
       has_children: hasIndividualProfile ? client.individual_profile?.has_children || false : client.has_children || false,
       children_list: hasIndividualProfile ? client.individual_profile?.children_list || "" : client.children_list || "",
+      education_level: hasIndividualProfile ? client.individual_profile?.education_level || "" : client.education_level || "",
       education: hasIndividualProfile ? client.individual_profile?.education || "" : client.education || "",
       job: hasIndividualProfile ? client.individual_profile?.job || "" : client.job || "",
       trips_last5_years: hasIndividualProfile ? client.individual_profile?.trips_last5_years || "" : client.trips_last5_years || "",
@@ -1050,8 +1051,9 @@ useEffect(() => {
       payload.previous_last_name = clientFormData.previous_last_name || "";
       payload.spouse_name = clientFormData.spouse_name || "";
       payload.spouse_contacts = clientFormData.spouse_contacts || "";
-      payload.has_children = clientFormData.has_children || false;
-      payload.children_list = clientFormData.children_list || "";
+      payload.has_children = clientFormData.has_children;
+      if (clientFormData.children_list) payload.children_list = clientFormData.children_list;
+      payload.education_level = clientFormData.education_level || "";
       payload.education = clientFormData.education || "";
       payload.job = clientFormData.job || "";
       payload.trips_last5_years = clientFormData.trips_last5_years || "";
@@ -1067,56 +1069,10 @@ useEffect(() => {
       payload.visa_refusals = clientFormData.visa_refusals || "";
       payload.height = clientFormData.height || 0;
       payload.weight = clientFormData.weight || 0;
-      payload.driver_license_categories = clientFormData.driver_license_categories || "";
+      if (clientFormData.driver_license_categories) payload.driver_license_categories = clientFormData.driver_license_categories;
       payload.therapist_name = clientFormData.therapist_name || "";
       payload.clinic_name = clientFormData.clinic_name || "";
       payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
-
-      // Also send individual_profile for complete data
-      payload.individual_profile = {
-        last_name: clientFormData.last_name || "",
-        first_name: clientFormData.first_name || "",
-        middle_name: clientFormData.middle_name || "",
-        iin: clientFormData.iin || "",
-        id_number: clientFormData.id_number || "",
-        passport_series: clientFormData.passport_series || "",
-        passport_number: clientFormData.passport_number || "",
-        registration_address: clientFormData.registration_address || "",
-        actual_address: clientFormData.actual_address || "",
-        country: clientFormData.country || "",
-        trip_purpose: clientFormData.trip_purpose || "",
-        birth_date: clientFormData.birth_date ? clientFormData.birth_date.split('T')[0] : "",
-        birth_place: clientFormData.birth_place || "",
-        citizenship: clientFormData.citizenship || "",
-        sex: clientFormData.sex || "",
-        marital_status: clientFormData.marital_status || "",
-        passport_issue_date: clientFormData.passport_issue_date ? clientFormData.passport_issue_date.split('T')[0] : "",
-        passport_expire_date: clientFormData.passport_expire_date ? clientFormData.passport_expire_date.split('T')[0] : "",
-        previous_last_name: clientFormData.previous_last_name || "",
-        spouse_name: clientFormData.spouse_name || "",
-        spouse_contacts: clientFormData.spouse_contacts || "",
-        has_children: clientFormData.has_children || false,
-        children_list: clientFormData.children_list || "",
-        education: clientFormData.education || "",
-        job: clientFormData.job || "",
-        trips_last5_years: clientFormData.trips_last5_years || "",
-        relatives_in_destination: clientFormData.relatives_in_destination || "",
-        trusted_person: clientFormData.trusted_person || "",
-        specialty: clientFormData.specialty || "",
-        trusted_person_phone: clientFormData.trusted_person_phone || "",
-        driver_license_number: clientFormData.driver_license_number || "",
-        education_institution_name: clientFormData.education_institution_name || "",
-        education_institution_address: clientFormData.education_institution_address || "",
-        position: clientFormData.position || "",
-        visas_received: clientFormData.visas_received || "",
-        visa_refusals: clientFormData.visa_refusals || "",
-        height: clientFormData.height || 0,
-        weight: clientFormData.weight || 0,
-        driver_license_categories: clientFormData.driver_license_categories || "",
-        therapist_name: clientFormData.therapist_name || "",
-        clinic_name: clientFormData.clinic_name || "",
-        diseases_last3_years: clientFormData.diseases_last3_years || "",
-      };
     }
 
     try {
@@ -1155,8 +1111,9 @@ useEffect(() => {
         if (clientFormData.previous_last_name) updatePayload.previous_last_name = clientFormData.previous_last_name;
         if (clientFormData.spouse_name) updatePayload.spouse_name = clientFormData.spouse_name;
         if (clientFormData.spouse_contacts) updatePayload.spouse_contacts = clientFormData.spouse_contacts;
-        if (clientFormData.has_children !== undefined && clientFormData.has_children !== false) updatePayload.has_children = clientFormData.has_children;
-        if (clientFormData.children_list) updatePayload.children_list = JSON.stringify(clientFormData.children_list);
+        if (clientFormData.has_children !== undefined) updatePayload.has_children = clientFormData.has_children;
+        if (clientFormData.children_list) updatePayload.children_list = clientFormData.children_list;
+        if (clientFormData.education_level) updatePayload.education_level = clientFormData.education_level;
         if (clientFormData.education) updatePayload.education = clientFormData.education;
         if (clientFormData.job) updatePayload.job = clientFormData.job;
         if (clientFormData.trips_last5_years) updatePayload.trips_last5_years = clientFormData.trips_last5_years;
@@ -1170,13 +1127,22 @@ useEffect(() => {
         if (clientFormData.position) updatePayload.position = clientFormData.position;
         if (clientFormData.visas_received) updatePayload.visas_received = clientFormData.visas_received;
         if (clientFormData.visa_refusals) updatePayload.visa_refusals = clientFormData.visa_refusals;
-        if (clientFormData.height && clientFormData.height > 0) updatePayload.height = clientFormData.height;
-        if (clientFormData.weight && clientFormData.weight > 0) updatePayload.weight = clientFormData.weight;
-        if (clientFormData.driver_license_categories) updatePayload.driver_license_categories = JSON.stringify(clientFormData.driver_license_categories);
+        updatePayload.height = clientFormData.height || 0;
+        updatePayload.weight = clientFormData.weight || 0;
+        if (clientFormData.driver_license_categories) updatePayload.driver_license_categories = clientFormData.driver_license_categories;
         if (clientFormData.therapist_name) updatePayload.therapist_name = clientFormData.therapist_name;
         if (clientFormData.clinic_name) updatePayload.clinic_name = clientFormData.clinic_name;
         if (clientFormData.diseases_last3_years) updatePayload.diseases_last3_years = clientFormData.diseases_last3_years;
         if (clientFormData.additional_info) updatePayload.additional_info = clientFormData.additional_info;
+
+        // Add individual_profile for individual clients with height/weight
+        if (clientFormData.client_type === "individual") {
+          updatePayload.individual_profile = {
+            education_level: clientFormData.education_level || "",
+            height: clientFormData.height || 0,
+            weight: clientFormData.weight || 0,
+          };
+        }
 
         // Add legal_profile for legal clients
         if (clientFormData.client_type === "legal") {
@@ -1756,8 +1722,8 @@ useEffect(() => {
                         <Textarea id="registration_address" placeholder="Адрес прописки" value={clientFormData.registration_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="residential_address">Адрес проживания</Label>
-                        <Textarea id="residential_address" placeholder="Адрес проживания" value={clientFormData.residential_address || ""} onChange={handleFormChange} rows={2} />
+                        <Label htmlFor="actual_address">Адрес проживания</Label>
+                        <Textarea id="actual_address" placeholder="Адрес проживания" value={clientFormData.actual_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -1797,23 +1763,23 @@ useEffect(() => {
                           <Label htmlFor="specialty">Специальность</Label>
                           <Input id="specialty" placeholder="Специальность" value={clientFormData.specialty || ""} onChange={handleFormChange} />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="education_institution">Название учебного заведения</Label>
-                        <Input id="education_institution" placeholder="Название учебного заведения" value={clientFormData.education_institution || ""} onChange={handleFormChange} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="education_institution_address">Адрес учебного заведения</Label>
-                        <Textarea id="education_institution_address" placeholder="Адрес учебного заведения" value={clientFormData.education_institution_address || ""} onChange={handleFormChange} rows={2} />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="job">Место работы</Label>
-                          <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
+                          <Label htmlFor="education_institution_name">Название учебного заведения</Label>
+                          <Input id="education_institution_name" placeholder="Название учебного заведения" value={clientFormData.education_institution_name || ""} onChange={handleFormChange} />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="position">Должность</Label>
-                          <Input id="position" placeholder="Должность" value={clientFormData.position || ""} onChange={handleFormChange} />
+                          <Label htmlFor="education_institution_address">Адрес учебного заведения</Label>
+                          <Textarea id="education_institution_address" placeholder="Адрес учебного заведения" value={clientFormData.education_institution_address || ""} onChange={handleFormChange} rows={2} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="job">Место работы</Label>
+                            <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="position">Должность</Label>
+                            <Input id="position" placeholder="Должность" value={clientFormData.position || ""} onChange={handleFormChange} />
+                          </div>
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -2021,7 +1987,8 @@ useEffect(() => {
                       <h3 className="font-semibold text-lg">ДОВЕРЕННОЕ ЛИЦО</h3>
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="ФИО доверенного лица" value={viewingClient.trusted_person} />
+                        <DetailItem label="ФИО доверенного лица" value={viewingClient.individual_profile?.trusted_person || viewingClient.trusted_person} />
+                        <DetailItem label="Телефон доверенного лица" value={viewingClient.individual_profile?.trusted_person_phone || viewingClient.trusted_person_phone} />
                       </div>
                     </div>
 
@@ -2042,10 +2009,16 @@ useEffect(() => {
                       <h3 className="font-semibold text-lg">РАБОТА И ОБРАЗОВАНИЕ</h3>
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Образование" value={viewingClient.education} />
-                        <DetailItem label="Место работы" value={viewingClient.job} />
-                        <DetailItem label="Поездки за 5 лет" value={viewingClient.trips_last5_years} />
-                        <DetailItem label="Родственники в стране назначения" value={viewingClient.relatives_in_destination} />
+                        <DetailItem label="Специальность" value={viewingClient.individual_profile?.specialty || viewingClient.specialty} />
+                        <DetailItem label="Образование" value={viewingClient.individual_profile?.education || viewingClient.education} />
+                        <DetailItem label="Название учебного заведения" value={viewingClient.individual_profile?.education_institution_name || viewingClient.education_institution_name} />
+                        <DetailItem label="Адрес учебного заведения" value={viewingClient.individual_profile?.education_institution_address || viewingClient.education_institution_address} />
+                        <DetailItem label="Место работы" value={viewingClient.individual_profile?.job || viewingClient.job} />
+                        <DetailItem label="Должность" value={viewingClient.individual_profile?.position || viewingClient.position} />
+                        <DetailItem label="Поездки за 5 лет" value={viewingClient.individual_profile?.trips_last5_years || viewingClient.trips_last5_years} />
+                        <DetailItem label="Родственники в стране назначения" value={viewingClient.individual_profile?.relatives_in_destination || viewingClient.relatives_in_destination} />
+                        <DetailItem label="Полученные визы" value={viewingClient.individual_profile?.visas_received || viewingClient.visas_received} />
+                        <DetailItem label="Отказы в визах" value={viewingClient.individual_profile?.visa_refusals || viewingClient.visa_refusals} />
                       </div>
                     </div>
 
@@ -2054,12 +2027,13 @@ useEffect(() => {
                       <h3 className="font-semibold text-lg">МЕДИЦИНСКАЯ ИНФОРМАЦИЯ</h3>
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Рост" value={viewingClient.height?.toString()} />
-                        <DetailItem label="Вес" value={viewingClient.weight?.toString()} />
-                        <DetailItem label="Категории водительских прав" value={viewingClient.driver_license_categories} />
-                        <DetailItem label="Терапевт" value={viewingClient.therapist_name} />
-                        <DetailItem label="Клиника" value={viewingClient.clinic_name} />
-                        <DetailItem label="Заболевания за 3 года" value={viewingClient.diseases_last3_years} />
+                        <DetailItem label="Рост" value={viewingClient.individual_profile?.height?.toString() || viewingClient.height?.toString()} />
+                        <DetailItem label="Вес" value={viewingClient.individual_profile?.weight?.toString() || viewingClient.weight?.toString()} />
+                        <DetailItem label="Серия и номер водительских прав" value={viewingClient.individual_profile?.driver_license_number || viewingClient.driver_license_number} />
+                        <DetailItem label="Категории водительских прав" value={viewingClient.individual_profile?.driver_license_categories || viewingClient.driver_license_categories} />
+                        <DetailItem label="Терапевт" value={viewingClient.individual_profile?.therapist_name || viewingClient.therapist_name} />
+                        <DetailItem label="Клиника" value={viewingClient.individual_profile?.clinic_name || viewingClient.clinic_name} />
+                        <DetailItem label="Заболевания за 3 года" value={viewingClient.individual_profile?.diseases_last3_years || viewingClient.diseases_last3_years} />
                       </div>
                     </div>
                   </>
