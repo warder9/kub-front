@@ -110,7 +110,6 @@ import {
     createDocumentFromClient,
     uploadDocument,
     downloadDocument,
-    viewDocumentFile,
     deleteDocument,
     submitDocument,
     reviewDocument,
@@ -428,11 +427,14 @@ export default function DocumentsPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [createForm, setCreateForm] = useState({
         client_id: "",
+        client_type: "" as string,
         deal_id: "",
         doc_type: "contract_paid_full_ru" as string,
         extra: {} as Record<string, any>,
     })
     const [createError, setCreateError] = useState<string | null>(null)
+    const [filteredDeals, setFilteredDeals] = useState<any[]>([])
+    const [loadingDeals, setLoadingDeals] = useState(false)
 
     // ─── Details / View ─────────────────────────────────────────
 
@@ -509,6 +511,7 @@ export default function DocumentsPage() {
     const openCreate = () => {
         setCreateForm({
             client_id: "",
+            client_type: "",
             deal_id: selectedDealId?.toString() || "",
             doc_type: "contract_paid_full_ru",
             extra: {},
@@ -518,13 +521,8 @@ export default function DocumentsPage() {
     }
 
     const handleViewFile = async (doc: Document) => {
-        try {
-            const blob = await viewDocumentFile(doc.id)
-            const url = URL.createObjectURL(blob)
-            window.open(url, "_blank")
-        } catch (err: any) {
-            toast.error(err?.message || "Ошибка при просмотре документа")
-        }
+        setSelectedPdfDoc(doc)
+        setIsPdfViewerOpen(true)
     }
 
     const handleDownload = async (doc: Document) => {
@@ -572,7 +570,30 @@ export default function DocumentsPage() {
     }
 
     const handleCreate = async () => {
-        // Handle document creation
+        if (!createForm.client_id || !createForm.deal_id || !createForm.client_type) {
+            setCreateError("Необходимо выбрать клиента и сделку")
+            return
+        }
+
+        setActionLoading(true)
+        setCreateError(null)
+        try {
+            await createDocumentFromClient({
+                client_id: Number(createForm.client_id),
+                client_type: createForm.client_type,
+                deal_id: Number(createForm.deal_id),
+                doc_type: createForm.doc_type,
+                extra: createForm.extra,
+            })
+            toast.success("Документ успешно создан")
+            setIsCreateOpen(false)
+            await fetchDocuments()
+        } catch (err: any) {
+            console.error("Error creating document:", err)
+            setCreateError(err?.message || "Ошибка при создании документа")
+        } finally {
+            setActionLoading(false)
+        }
     }
 
     const handleDeleteConfirm = async () => {
@@ -647,6 +668,71 @@ export default function DocumentsPage() {
         }, 300)
         return () => clearTimeout(timer)
     }, [searchTerm, archiveFilter, user])
+
+    // ─── Load clients for create dialog ────────────────────────────
+
+    useEffect(() => {
+        const loadClientsForCreate = async () => {
+            if (!isCreateOpen || !user) return
+            
+            try {
+                const userRole = getRoleKey(user.role_id);
+                const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
+                const res = await fetchFn({ page: 1, size: 1000 });
+                const data = Array.isArray(res) ? res : (res as any)?.data || [];
+                setClients(data);
+            } catch (err: any) {
+                console.error("Error loading clients for create dialog:", err);
+                toast.error("Ошибка при загрузке клиентов");
+            }
+        };
+
+        loadClientsForCreate();
+    }, [isCreateOpen, user])
+
+    // ─── Load deals filtered by client ─────────────────────────────
+
+    const loadDealsForClient = async (clientId: string, clientType: string) => {
+        console.log('loadDealsForClient called with:', { clientId, clientType });
+        
+        if (!clientId || !clientType) {
+            console.log('Missing clientId or clientType, clearing filtered deals');
+            setFilteredDeals([])
+            return
+        }
+
+        setLoadingDeals(true)
+        try {
+            const userRole = getRoleKey(user.role_id);
+            console.log('User role:', userRole);
+            const fetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
+            console.log('Using fetchFn:', userRole === 'sales' ? 'list_my_deals' : 'list_deals');
+            
+            const params = { 
+                client_id: Number(clientId), 
+                client_type: clientType
+            };
+            console.log('API params:', params);
+            
+            const res = await fetchFn(undefined, params);
+            console.log('API response:', res);
+            
+            const data = Array.isArray(res) ? res : (res as any)?.data || [];
+            console.log('Filtered deals data:', data);
+            console.log('Number of deals:', data.length);
+            
+            // Filter out archived deals on frontend
+            const nonArchivedDeals = data.filter((d: any) => !d.archived);
+            console.log('Non-archived deals:', nonArchivedDeals);
+            
+            setFilteredDeals(nonArchivedDeals);
+        } catch (err: any) {
+            console.error("Error loading deals for client:", err);
+            setFilteredDeals([]);
+        } finally {
+            setLoadingDeals(false)
+        }
+    }
 
     // ─── Review (approve / return) ──────────────────────────────
 
@@ -1169,7 +1255,13 @@ export default function DocumentsPage() {
             </Card>
 
             {/* ── Create Document Dialog ─────────────────────────────── */}
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <Dialog open={isCreateOpen} onOpenChange={(open) => {
+                setIsCreateOpen(open)
+                if (!open) {
+                    setFilteredDeals([])
+                    setCreateError(null)
+                }
+            }}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Создать документ</DialogTitle>
@@ -1202,7 +1294,24 @@ export default function DocumentsPage() {
                             <Label>Клиент <span className="text-red-500">*</span></Label>
                             <ComboboxSelect
                                 value={createForm.client_id}
-                                onChange={(val) => setCreateForm({ ...createForm, client_id: val })}
+                                onChange={(val) => {
+                                    const selectedClient = clients.find(c => c.id.toString() === val);
+                                    console.log('Selected client:', selectedClient);
+                                    const clientType = selectedClient?.client_type || "";
+                                    console.log('Extracted client_type:', clientType);
+                                    setCreateForm({ 
+                                        ...createForm, 
+                                        client_id: val, 
+                                        client_type: clientType,
+                                        deal_id: "" 
+                                    });
+                                    setFilteredDeals([]);
+                                    if (val && clientType) {
+                                        loadDealsForClient(val, clientType);
+                                    } else {
+                                        console.log('Not loading deals - missing val or clientType');
+                                    }
+                                }}
                                 options={clientOptions}
                                 placeholder="Выберите клиента"
                                 searchPlaceholder="Поиск клиента..."
@@ -1216,11 +1325,18 @@ export default function DocumentsPage() {
                             <ComboboxSelect
                                 value={createForm.deal_id}
                                 onChange={(val) => setCreateForm({ ...createForm, deal_id: val })}
-                                options={dealOptions}
+                                options={filteredDeals.map((d) => ({
+                                    value: d.id.toString(),
+                                    label: d.amount ? `${Number(d.amount).toLocaleString()} ₸ (#${d.id})` : `Сделка #${d.id}`,
+                                }))}
                                 placeholder="Выберите сделку"
                                 searchPlaceholder="Поиск сделки..."
+                                disabled={!createForm.client_id || loadingDeals}
                             />
-                            {!createForm.deal_id && (
+                            {createForm.client_id && !loadingDeals && filteredDeals.length === 0 && (
+                                <p className="text-xs text-orange-500">У клиента нет сделок</p>
+                            )}
+                            {!createForm.deal_id && createForm.client_id && filteredDeals.length > 0 && (
                                 <p className="text-xs text-red-500">Выберите сделку</p>
                             )}
                         </div>
@@ -1269,7 +1385,7 @@ export default function DocumentsPage() {
                         </DialogClose>
                         <Button
                             onClick={handleCreate}
-                            disabled={actionLoading || !createForm.client_id || !createForm.deal_id}
+                            disabled={actionLoading || !createForm.client_id || !createForm.deal_id || filteredDeals.length === 0}
                         >
                             {actionLoading ? (
                                 <>

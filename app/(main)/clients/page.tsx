@@ -2019,6 +2019,19 @@ useEffect(() => {
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Специальность" value={viewingClient.individual_profile?.specialty || viewingClient.specialty} />
+                        <DetailItem label="Уровень образования" value={
+                          (() => {
+                            const level = viewingClient.individual_profile?.education_level || viewingClient.education_level;
+                            const levelMap: Record<string, string> = {
+                              higher: "Высшее",
+                              secondary_special: "Средне-специальное",
+                              secondary: "Среднее",
+                              primary: "Начальное",
+                              incomplete_higher: "Неоконченное высшее"
+                            };
+                            return level ? (levelMap[level] || level) : "";
+                          })()
+                        } />
                         <DetailItem label="Образование" value={viewingClient.individual_profile?.education || viewingClient.education} />
                         <DetailItem label="Название учебного заведения" value={viewingClient.individual_profile?.education_institution_name || viewingClient.education_institution_name} />
                         <DetailItem label="Адрес учебного заведения" value={viewingClient.individual_profile?.education_institution_address || viewingClient.education_institution_address} />
