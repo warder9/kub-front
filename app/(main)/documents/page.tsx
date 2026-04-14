@@ -479,17 +479,95 @@ export default function DocumentsPage() {
     const fetchDocuments = async () => {
         setLoading(true)
         try {
-            const params: any = { page: currentPage, size: size }
-            if (searchTerm) params.search = searchTerm
-            if (dealIdFilter) params.deal_id = dealIdFilter
-            if (archiveFilter !== "active") params.archive = archiveFilter
+            const userRole = getRoleKey(user?.role_id);
+            const isSales = userRole === 'sales';
 
-            const res = await getDocuments(params)
-            const data = Array.isArray(res) ? res : (res as any)?.data || []
-            const total = (res as any)?.total || data.length
+            // Sales users can only access documents via deal endpoint
+            if (isSales) {
+                if (selectedDealId) {
+                    // Fetch documents for the selected deal
+                    const params: any = { page: currentPage, size: size }
+                    if (searchTerm) params.search = searchTerm
 
-            setDocuments(data)
-            setTotalDocuments(total)
+                    const res = await getDocumentsByDeal(selectedDealId, params)
+                    let data = Array.isArray(res) ? res : (res as any)?.data || []
+                    const total = (res as any)?.total || data.length
+
+                    // Filter by archive status on frontend
+                    if (archiveFilter !== "active") {
+                        if (archiveFilter === "archived") {
+                            data = data.filter((doc: any) => doc.archived)
+                        } else {
+                            data = data.filter((doc: any) => !doc.archived)
+                        }
+                    }
+
+                    setDocuments(data)
+                    setTotalDocuments(total)
+                } else {
+                    // Sales user without selected deal - fetch their deals first, then documents
+                    const dealsRes = await DealsAPI.list_my_deals(undefined, {})
+                    const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
+                    
+                    // Filter out archived deals
+                    const nonArchivedDeals = userDeals.filter((d: any) => !d.archived)
+                    
+                    if (nonArchivedDeals.length === 0) {
+                        setDocuments([])
+                        setTotalDocuments(0)
+                        return
+                    }
+
+                    // Fetch documents for each deal
+                    const allDocs: any[] = []
+                    for (const deal of nonArchivedDeals) {
+                        try {
+                            const dealDocs = await getDocumentsByDeal(deal.id, {})
+                            const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
+                            allDocs.push(...docs)
+                        } catch (err) {
+                            console.error(`Error fetching documents for deal ${deal.id}:`, err)
+                        }
+                    }
+
+                    // Apply filters on frontend
+                    let filteredDocs = allDocs
+                    
+                    // Filter by archive status
+                    if (archiveFilter !== "active") {
+                        if (archiveFilter === "archived") {
+                            filteredDocs = filteredDocs.filter((doc: any) => doc.archived)
+                        } else {
+                            filteredDocs = filteredDocs.filter((doc: any) => !doc.archived)
+                        }
+                    }
+                    
+                    // Apply search filter
+                    if (searchTerm) {
+                        const term = searchTerm.toLowerCase()
+                        filteredDocs = filteredDocs.filter((doc: any) => 
+                            doc.doc_type?.toLowerCase().includes(term) ||
+                            doc.id?.toString().includes(term)
+                        )
+                    }
+
+                    setDocuments(filteredDocs)
+                    setTotalDocuments(filteredDocs.length)
+                }
+            } else {
+                // Non-sales users can use the general endpoint
+                const params: any = { page: currentPage, size: size }
+                if (searchTerm) params.search = searchTerm
+                if (dealIdFilter) params.deal_id = dealIdFilter
+                if (archiveFilter !== "active") params.archive = archiveFilter
+
+                const res = await getDocuments(params)
+                const data = Array.isArray(res) ? res : (res as any)?.data || []
+                const total = (res as any)?.total || data.length
+
+                setDocuments(data)
+                setTotalDocuments(total)
+            }
         } catch (err: any) {
             console.error("Error loading documents:", err)
             toast.error(err?.message || "Ошибка при загрузке документов")
@@ -693,10 +771,7 @@ export default function DocumentsPage() {
     // ─── Load deals filtered by client ─────────────────────────────
 
     const loadDealsForClient = async (clientId: string, clientType: string) => {
-        console.log('loadDealsForClient called with:', { clientId, clientType });
-        
         if (!clientId || !clientType) {
-            console.log('Missing clientId or clientType, clearing filtered deals');
             setFilteredDeals([])
             return
         }
@@ -704,26 +779,18 @@ export default function DocumentsPage() {
         setLoadingDeals(true)
         try {
             const userRole = getRoleKey(user.role_id);
-            console.log('User role:', userRole);
             const fetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
-            console.log('Using fetchFn:', userRole === 'sales' ? 'list_my_deals' : 'list_deals');
             
             const params = { 
                 client_id: Number(clientId), 
                 client_type: clientType
             };
-            console.log('API params:', params);
             
             const res = await fetchFn(undefined, params);
-            console.log('API response:', res);
-            
             const data = Array.isArray(res) ? res : (res as any)?.data || [];
-            console.log('Filtered deals data:', data);
-            console.log('Number of deals:', data.length);
             
             // Filter out archived deals on frontend
             const nonArchivedDeals = data.filter((d: any) => !d.archived);
-            console.log('Non-archived deals:', nonArchivedDeals);
             
             setFilteredDeals(nonArchivedDeals);
         } catch (err: any) {
@@ -1296,9 +1363,7 @@ export default function DocumentsPage() {
                                 value={createForm.client_id}
                                 onChange={(val) => {
                                     const selectedClient = clients.find(c => c.id.toString() === val);
-                                    console.log('Selected client:', selectedClient);
                                     const clientType = selectedClient?.client_type || "";
-                                    console.log('Extracted client_type:', clientType);
                                     setCreateForm({ 
                                         ...createForm, 
                                         client_id: val, 
@@ -1308,8 +1373,6 @@ export default function DocumentsPage() {
                                     setFilteredDeals([]);
                                     if (val && clientType) {
                                         loadDealsForClient(val, clientType);
-                                    } else {
-                                        console.log('Not loading deals - missing val or clientType');
                                     }
                                 }}
                                 options={clientOptions}
