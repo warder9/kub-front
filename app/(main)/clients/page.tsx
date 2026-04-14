@@ -118,30 +118,45 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   middle_name: "",
   iin: "",
   id_number: "",
+  id_issue_date: "",
+  id_expire_date: "",
   passport_series: "",
   passport_number: "",
+  passport_issue_date: "",
+  passport_expire_date: "",
   registration_address: "",
+  residential_address: "",
   country: "",
+  country_other: "",
   trip_purpose: "",
+  trip_purpose_other: "",
   birth_date: "",
   birth_place: "",
   citizenship: "",
   sex: "",
   marital_status: "",
-  passport_issue_date: "",
-  passport_expire_date: "",
   previous_last_name: "",
   spouse_name: "",
   spouse_contacts: "",
   has_children: false,
   children_list: "",
-  education: "",
+  education_level: "",
+  specialty: "",
+  education_institution: "",
+  education_institution_address: "",
   job: "",
+  position: "",
   trips_last5_years: "",
+  visas_received: "",
+  visa_refusals: "",
   relatives_in_destination: "",
   trusted_person: "",
+  trusted_person_phone: "",
   height: 0,
   weight: 0,
+  driver_license_number: "",
+  driver_license_issue_date: "",
+  driver_license_expire_date: "",
   driver_license_categories: "",
   therapist_name: "",
   clinic_name: "",
@@ -176,9 +191,54 @@ export default function ClientsPage() {
           last_name: "",
           first_name: "",
           middle_name: "",
-          birth_date: "",
+          iin: "",
+          id_number: "",
+          id_issue_date: "",
+          id_expire_date: "",
+          passport_series: "",
+          passport_number: "",
+          passport_issue_date: "",
+          passport_expire_date: "",
+          registration_address: "",
+          residential_address: "",
           country: "",
+          country_other: "",
           trip_purpose: "",
+          trip_purpose_other: "",
+          birth_date: "",
+          birth_place: "",
+          citizenship: "",
+          sex: "",
+          marital_status: "",
+          previous_last_name: "",
+          spouse_name: "",
+          spouse_contacts: "",
+          has_children: false,
+          children_list: "",
+          education_level: "",
+          specialty: "",
+          education_institution: "",
+          education_institution_address: "",
+          education: "",
+          job: "",
+          position: "",
+          trips_last5_years: "",
+          visas_received: "",
+          visa_refusals: "",
+          relatives_in_destination: "",
+          trusted_person: "",
+          trusted_person_phone: "",
+          height: 0,
+          weight: 0,
+          driver_license_number: "",
+          driver_license_issue_date: "",
+          driver_license_expire_date: "",
+          driver_license_categories: "",
+          therapist_name: "",
+          clinic_name: "",
+          diseases_last3_years: "",
+          additional_info: "",
+          photo_35x45: "",
         }));
       } else {
         setClientFormData(prev => ({
@@ -1095,49 +1155,68 @@ useEffect(() => {
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] p-4">
             <div className="space-y-8">
-              {/* Required Fields (RED) */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg text-red-600 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  Обязательные поля
-                </h3>
-                <Separator />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="client_type" className="text-red-600">Тип клиента *</Label>
-                    <CustomSelect
-                      value={clientFormData.client_type || "individual"}
-                      onChange={(value) => setClientFormData(prev => ({ ...prev, client_type: value }))}
-                      options={[
-                        { value: "individual", label: "Физическое лицо" },
-                        { value: "legal", label: "Юридическое лицо" }
-                      ]}
-                      placeholder="Выберите тип клиента..."
-                      disabled={!!editingClient}
-                    />
-                    {editingClient && (
-                      <p className="text-xs text-muted-foreground mt-1">Тип клиента нельзя изменить после создания</p>
-                    )}
-                  </div>
-                  {clientFormData.client_type !== "legal" && (
-                    <>
-                      <div>
-                        <Label htmlFor="country" className="text-red-600">Страна *</Label>
+              {/* Client Type */}
+              <div className="space-y-2">
+                <Label htmlFor="client_type">Тип лица *</Label>
+                <CustomSelect
+                  value={clientFormData.client_type || "individual"}
+                  onChange={(value) => setClientFormData(prev => ({ ...prev, client_type: value }))}
+                  options={[
+                    { value: "individual", label: "Физическое лицо" },
+                    { value: "legal", label: "Юридическое лицо" }
+                  ]}
+                  placeholder="Выберите тип лица..."
+                  disabled={!!editingClient}
+                />
+                {editingClient && (
+                  <p className="text-xs text-muted-foreground">Тип лица нельзя изменить после создания</p>
+                )}
+              </div>
+
+              {/* Individual Client Fields */}
+              {clientFormData.client_type === "individual" && (
+                <>
+                  {/* Country and Trip Purpose - FIRST */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Страна *</Label>
                         <CustomSelect
                           value={clientFormData.country || ""}
                           onChange={(value) => setClientFormData(prev => ({ ...prev, country: value }))}
                           options={[
-                            { value: "kazakhstan", label: "Казахстан" },
-                            { value: "russia", label: "Россия" },
+                            { value: "south_korea", label: "Южная Корея" },
+                            { value: "japan", label: "Япония" },
                             { value: "usa", label: "США" },
-                            { value: "europe", label: "Европа" },
-                            { value: "other", label: "Другое" }
+                            { value: "uk", label: "Великобритания" },
+                            { value: "australia", label: "Австралия" },
+                            { value: "canada", label: "Канада" },
+                            { value: "poland", label: "Польша" },
+                            { value: "estonia", label: "Эстония" },
+                            { value: "lithuania", label: "Литва" },
+                            { value: "slovakia", label: "Словакия" },
+                            { value: "germany", label: "Германия" },
+                            { value: "italy", label: "Италия" },
+                            { value: "spain", label: "Испания" },
+                            { value: "czech_republic", label: "Чехия" },
+                            { value: "norway", label: "Норвегия" },
+                            { value: "sweden", label: "Швеция" },
+                            { value: "france", label: "Франция" },
+                            { value: "other", label: "Другая страна..." }
                           ]}
                           placeholder="Выберите страну..."
                         />
+                        {clientFormData.country === "other" && (
+                          <Input
+                            id="country_other"
+                            placeholder="Укажите страну..."
+                            value={clientFormData.country_other || ""}
+                            onChange={handleFormChange}
+                          />
+                        )}
                       </div>
-                      <div>
-                        <Label htmlFor="trip_purpose" className="text-red-600">Цель поездки *</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="trip_purpose">Цель поездки *</Label>
                         <CustomSelect
                           value={clientFormData.trip_purpose || ""}
                           onChange={(value) => setClientFormData(prev => ({ ...prev, trip_purpose: value }))}
@@ -1146,39 +1225,330 @@ useEffect(() => {
                             { value: "business", label: "Бизнес" },
                             { value: "study", label: "Учеба" },
                             { value: "work", label: "Работа" },
+                            { value: "family_visit", label: "Посещение семьи/друзей" },
                             { value: "medical", label: "Лечение" },
-                            { value: "family", label: "Посещение семьи" },
-                            { value: "other", label: "Другое" }
+                            { value: "residence_permit", label: "ВНЖ" },
+                            { value: "permanent_residence", label: "ПМЖ" },
+                            { value: "transit", label: "Транзит" },
+                            { value: "other", label: "Другая цель..." }
                           ]}
                           placeholder="Выберите цель..."
                         />
+                        {clientFormData.trip_purpose === "other" && (
+                          <Input
+                            id="trip_purpose_other"
+                            placeholder="Укажите цель..."
+                            value={clientFormData.trip_purpose_other || ""}
+                            onChange={handleFormChange}
+                          />
+                        )}
                       </div>
-                    </>
-                  )}
-                  {clientFormData.client_type !== "legal" && (
-                    <>
-                      <div>
-                        <Label htmlFor="last_name" className="text-red-600">Фамилия *</Label>
-                        <Input id="last_name" placeholder="Введите фамилию..." value={clientFormData.last_name || ""} onChange={handleFormChange} />
+                    </div>
+                  </div>
+
+                  {/* Personal Data Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">ЛИЧНЫЕ ДАННЫЕ</h3>
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="last_name">Фамилия *</Label>
+                        <Input id="last_name" placeholder="Фамилия" value={clientFormData.last_name || ""} onChange={handleFormChange} />
                       </div>
-                      <div>
-                        <Label htmlFor="first_name" className="text-red-600">Имя *</Label>
-                        <Input id="first_name" placeholder="Введите имя..." value={clientFormData.first_name || ""} onChange={handleFormChange} />
+                      <div className="space-y-2">
+                        <Label htmlFor="first_name">Имя *</Label>
+                        <Input id="first_name" placeholder="Имя" value={clientFormData.first_name || ""} onChange={handleFormChange} />
                       </div>
-                      <div>
-                        <Label htmlFor="birth_date" className="text-red-600">Дата рождения *</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="middle_name">Отчество (если имеется)</Label>
+                        <Input id="middle_name" placeholder="Отчество" value={clientFormData.middle_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="previous_last_name">Прежняя фамилия</Label>
+                        <Input id="previous_last_name" placeholder="Прежняя фамилия" value={clientFormData.previous_last_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="birth_date">Дата рождения *</Label>
                         <Input id="birth_date" type="date" value={clientFormData.birth_date || ""} onChange={handleFormChange} />
                       </div>
-                    </>
-                  )}
-                  {clientFormData.client_type !== "legal" && (
-                    <div>
-                      <Label htmlFor="phone" className="text-red-600">Номер телефона *</Label>
-                      <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                      <div className="space-y-2">
+                        <Label htmlFor="sex">Пол *</Label>
+                        <CustomSelect
+                          value={clientFormData.sex || ""}
+                          onChange={(value) => setClientFormData(prev => ({ ...prev, sex: value }))}
+                          options={[
+                            { value: "male", label: "Мужской" },
+                            { value: "female", label: "Женский" }
+                          ]}
+                          placeholder="Выберите пол..."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="citizenship">Гражданство *</Label>
+                        <Input id="citizenship" placeholder="Гражданство" value={clientFormData.citizenship || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="birth_place">Место рождения</Label>
+                        <Input id="birth_place" placeholder="Место рождения" value={clientFormData.birth_place || ""} onChange={handleFormChange} />
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+
+                  {/* Documents Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">ДОКУМЕНТЫ</h3>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="iin">ИИН</Label>
+                        <Input id="iin" placeholder="ИИН" value={clientFormData.iin || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="id_number">Номер удостоверения личности</Label>
+                          <Input id="id_number" placeholder="Номер" value={clientFormData.id_number || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="id_issue_date">Дата выдачи</Label>
+                          <Input id="id_issue_date" type="date" value={clientFormData.id_issue_date || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="id_expire_date">Дата окончания</Label>
+                          <Input id="id_expire_date" type="date" value={clientFormData.id_expire_date || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="passport_series">Серия паспорта</Label>
+                          <Input id="passport_series" placeholder="Серия" value={clientFormData.passport_series || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="passport_number">Номер паспорта</Label>
+                          <Input id="passport_number" placeholder="Номер" value={clientFormData.passport_number || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
+                          <Input id="passport_issue_date" type="date" value={clientFormData.passport_issue_date || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="passport_expire_date">Дата окончания паспорта</Label>
+                          <Input id="passport_expire_date" type="date" value={clientFormData.passport_expire_date || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="driver_license_number">Серия и номер водительского удостоверения</Label>
+                          <Input id="driver_license_number" placeholder="Серия и номер" value={clientFormData.driver_license_number || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="driver_license_issue_date">Дата выдачи</Label>
+                          <Input id="driver_license_issue_date" type="date" value={clientFormData.driver_license_issue_date || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="driver_license_expire_date">Дата окончания</Label>
+                          <Input id="driver_license_expire_date" type="date" value={clientFormData.driver_license_expire_date || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Marital Status Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">СЕМЕЙНОЕ ПОЛОЖЕНИЕ</h3>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="marital_status">Гражданское состояние</Label>
+                          <CustomSelect
+                            value={clientFormData.marital_status || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, marital_status: value }))}
+                            options={[
+                              { value: "married", label: "В браке" },
+                              { value: "not_married", label: "Не в браке" },
+                              { value: "divorced", label: "В разводе" },
+                              { value: "widowed", label: "Вдова/Вдовец" },
+                              { value: "civil_marriage", label: "Гражданский брак" }
+                            ]}
+                            placeholder="Выберите статус..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="has_children">Есть ли дети</Label>
+                          <CustomSelect
+                            value={clientFormData.has_children ? "true" : "false"}
+                            onChange={(value) => handleBooleanChange("has_children", value)}
+                            options={[{ value: "true", label: "Да" }, { value: "false", label: "Нет" }]}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="spouse_name">ФИО супруга(и)</Label>
+                          <Input id="spouse_name" placeholder="ФИО" value={clientFormData.spouse_name || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="spouse_contacts">Телефон супруга(и)</Label>
+                          <Input id="spouse_contacts" placeholder="Телефон" value={clientFormData.spouse_contacts || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="children_list">Дети</Label>
+                        <Textarea id="children_list" placeholder="Информация о детях..." value={clientFormData.children_list || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trusted Person Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">ДОВЕРЕННОЕ ЛИЦО</h3>
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="trusted_person">ФИО доверенного лица</Label>
+                        <Input id="trusted_person" placeholder="ФИО" value={clientFormData.trusted_person || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="trusted_person_phone">Телефон доверенного лица</Label>
+                        <Input id="trusted_person_phone" placeholder="Телефон" value={clientFormData.trusted_person_phone || ""} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contacts and Address Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">КОНТАКТЫ И АДРЕС</h3>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="registration_address">Адрес прописки</Label>
+                        <Textarea id="registration_address" placeholder="Адрес прописки" value={clientFormData.registration_address || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="residential_address">Адрес проживания</Label>
+                        <Textarea id="residential_address" placeholder="Адрес проживания" value={clientFormData.residential_address || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Телефон *</Label>
+                          <Input id="phone" placeholder="Телефон" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input id="email" type="email" placeholder="Email" value={clientFormData.email || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Work and Education Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">РАБОТА И ОБРАЗОВАНИЕ</h3>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="education_level">Образование</Label>
+                          <CustomSelect
+                            value={clientFormData.education_level || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, education_level: value }))}
+                            options={[
+                              { value: "higher", label: "Высшее" },
+                              { value: "secondary_special", label: "Средне-специальное" },
+                              { value: "secondary", label: "Среднее" },
+                              { value: "primary", label: "Начальное" },
+                              { value: "incomplete_higher", label: "Неоконченное высшее" }
+                            ]}
+                            placeholder="Выберите уровень образования..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="specialty">Специальность</Label>
+                          <Input id="specialty" placeholder="Специальность" value={clientFormData.specialty || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="education_institution">Название учебного заведения</Label>
+                        <Input id="education_institution" placeholder="Название учебного заведения" value={clientFormData.education_institution || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="education_institution_address">Адрес учебного заведения</Label>
+                        <Textarea id="education_institution_address" placeholder="Адрес учебного заведения" value={clientFormData.education_institution_address || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="job">Место работы</Label>
+                          <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="position">Должность</Label>
+                          <Input id="position" placeholder="Должность" value={clientFormData.position || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="education">Образование (текст)</Label>
+                        <Input id="education" placeholder="Дополнительная информация об образовании" value={clientFormData.education || ""} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visa History Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">ВИЗОВАЯ ИСТОРИЯ</h3>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="trips_last5_years">Поездки за последние 5 лет</Label>
+                        <Textarea id="trips_last5_years" placeholder="Перечислите страны и даты поездок" value={clientFormData.trips_last5_years || ""} onChange={handleFormChange} rows={3} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="visas_received">Полученные визы</Label>
+                        <Textarea id="visas_received" placeholder="Перечислите полученные визы" value={clientFormData.visas_received || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="visa_refusals">Отказы в визах</Label>
+                        <Textarea id="visa_refusals" placeholder="Были ли отказы в визах? Если да, укажите детали" value={clientFormData.visa_refusals || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="relatives_in_destination">Члены семьи за рубежом</Label>
+                        <Textarea id="relatives_in_destination" placeholder="ФИО членов семьи, проживающих за рубежом" value={clientFormData.relatives_in_destination || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Medical Information Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="font-semibold text-lg">МЕДИЦИНСКАЯ ИНФОРМАЦИЯ</h3>
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="height">Рост</Label>
+                        <Input id="height" type="number" placeholder="Рост (см)" value={clientFormData.height || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="weight">Вес</Label>
+                        <Input id="weight" type="number" placeholder="Вес (кг)" value={clientFormData.weight || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="therapist_name">ФИО терапевта</Label>
+                        <Input id="therapist_name" placeholder="ФИО" value={clientFormData.therapist_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="clinic_name">Название клиники</Label>
+                        <Input id="clinic_name" placeholder="Название клиники" value={clientFormData.clinic_name || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="diseases_last3_years">Болезни / травмы за последние 5 лет</Label>
+                        <Textarea id="diseases_last3_years" placeholder="Укажите перенесенные болезни или травмы" value={clientFormData.diseases_last3_years || ""} onChange={handleFormChange} rows={2} />
+                      </div>
+                      <div>
+                        <Label htmlFor="driver_license_categories">Категории водительских прав</Label>
+                        <Input id="driver_license_categories" placeholder="Категории..." value={clientFormData.driver_license_categories || ""} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Legal Entity Information - shown only for legal clients */}
               {clientFormData.client_type === "legal" && (
@@ -1229,226 +1599,65 @@ useEffect(() => {
                       <Label htmlFor="kbe">КБЕ</Label>
                       <Input id="kbe" placeholder="КБЕ..." value={clientFormData.kbe || ""} onChange={handleFormChange} />
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Personal Information - only for individual clients */}
-              {clientFormData.client_type === "individual" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <UserIcon className="h-5 w-5" />
-                    Персональная информация
-                  </h3>
-                  <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="middle_name">Отчество</Label>
-                      <Input id="middle_name" placeholder="Введите отчество..." value={clientFormData.middle_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="birth_place">Место рождения</Label>
-                      <Input id="birth_place" placeholder="Страна/область/город/село..." value={clientFormData.birth_place || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="citizenship">Гражданство</Label>
-                      <Input id="citizenship" placeholder="Введите гражданство..." value={clientFormData.citizenship || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="sex">Пол</Label>
-                      <CustomSelect
-                        value={clientFormData.sex || ""}
-                        onChange={(value) => setClientFormData(prev => ({ ...prev, sex: value }))}
-                        options={[
-                          { value: "male", label: "Мужской" },
-                          { value: "female", label: "Женский" }
-                        ]}
-                        placeholder="Выберите пол..."
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="marital_status">Гражданское состояние</Label>
-                      <CustomSelect
-                        value={clientFormData.marital_status || ""}
-                        onChange={(value) => setClientFormData(prev => ({ ...prev, marital_status: value }))}
-                        options={[
-                          { value: "single", label: "Холост/Не замужем" },
-                          { value: "married", label: "Женат/Замужем" },
-                          { value: "divorced", label: "Разведен(а)" },
-                          { value: "widowed", label: "Вдовец/Вдова" }
-                        ]}
-                        placeholder="Выберите состояние..."
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="iin">ИИН</Label>
-                      <Input id="iin" placeholder="Введите ИИН..." value={clientFormData.iin || ""} onChange={handleFormChange} />
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <Label htmlFor="additional_info">Дополнительная информация</Label>
+                      <Textarea id="additional_info" placeholder="Комментарии и заметки..." value={clientFormData.additional_info || ""} onChange={handleFormChange} rows={3} />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Document Information - only for individual clients */}
+              {/* Photo upload for individual clients */}
               {clientFormData.client_type === "individual" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Документы
-                  </h3>
+                <div className="space-y-4 border-t pt-4">
+                  <h3 className="font-semibold text-lg">ФОТО</h3>
                   <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="id_number">Номер удостоверения</Label>
-                      <Input id="id_number" placeholder="Введите № удостоверения..." value={clientFormData.id_number || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="passport_series">Серия паспорта</Label>
-                      <Input id="passport_series" placeholder="Введите серию паспорта..." value={clientFormData.passport_series || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="passport_number">Номер паспорта</Label>
-                      <Input id="passport_number" placeholder="Введите номер паспорта..." value={clientFormData.passport_number || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
-                      <Input id="passport_issue_date" type="date" value={clientFormData.passport_issue_date || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="passport_expire_date">Дата окончания паспорта</Label>
-                      <Input id="passport_expire_date" type="date" value={clientFormData.passport_expire_date || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
-                      <div className="space-y-2">
-                        {photoPreview ? (
-                          <div className="relative">
-                            <img 
-                              src={photoPreview} 
-                              alt="Preview" 
-                              className="w-32 h-40 object-cover rounded border border-gray-200"
-                            />
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="absolute top-1 right-1 h-6 w-6 p-0"
-                              onClick={clearPhoto}
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                            <div className="text-center">
-                              <div className="text-gray-400 mb-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="photo_35x45">Фото 3,5x4,5</Label>
+                    <div className="space-y-2">
+                      {photoPreview ? (
+                        <div className="relative">
+                          <img 
+                            src={photoPreview} 
+                            alt="Preview" 
+                            className="w-32 h-40 object-cover rounded border border-gray-200"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-1 right-1 h-6 w-6 p-0"
+                            onClick={clearPhoto}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                          <div className="text-center">
+                            <div className="text-gray-400 mb-2">
                               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                               </svg>
                             </div>
-                              <div className="text-sm text-gray-600">
-                                <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
-                                  Выберите фото
-                                </label>
-                                {' '}
-                                или перетащите файл сюда
-                              </div>
-                              <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
+                            <div className="text-sm text-gray-600">
+                              <label htmlFor="photo-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
+                                Выберите фото
+                              </label>
+                              {' '}
+                              или перетащите файл сюда
                             </div>
-                            <input
-                              id="photo-upload"
-                              type="file"
-                              className="hidden"
-                              accept=".jpg,.jpeg,.png"
-                              onChange={handlePhotoSelect}
-                            />
+                            <p className="text-xs text-gray-500">JPG, JPEG, PNG до 5 МБ</p>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Optional Fields - only for individual clients */}
-              {clientFormData.client_type === "individual" && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Дополнительная информация (необязательно)
-                  </h3>
-                  <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="previous_last_name">Прежняя фамилия (девичья)</Label>
-                      <Input id="previous_last_name" placeholder="Введите прежнюю фамилию..." value={clientFormData.previous_last_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="spouse_name">Супруг(а) - ФИО</Label>
-                      <Input id="spouse_name" placeholder="ФИО супруга(и)..." value={clientFormData.spouse_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="spouse_contacts">Контакты супруга(и)</Label>
-                      <Input id="spouse_contacts" placeholder="Контакты супруга(и)..." value={clientFormData.spouse_contacts || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="has_children">Есть дети?</Label>
-                      <CustomSelect
-                        value={clientFormData.has_children ? "true" : "false"}
-                        onChange={(value) => handleBooleanChange("has_children", value)}
-                        options={[{ value: "true", label: "Да" }, { value: "false", label: "Нет" }]}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="children_list">Дети</Label>
-                      <Textarea id="children_list" placeholder="Информация о детях (имя/фамилия/год рождения)..." value={clientFormData.children_list || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="education">Образование</Label>
-                      <Input id="education" placeholder="Введите образование..." value={clientFormData.education || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="job">Место работы и должность</Label>
-                      <Input id="job" placeholder="Введите место работы и должность..." value={clientFormData.job || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="trips_last5_years">Поездки и визы за последние 5 лет</Label>
-                      <Textarea id="trips_last5_years" placeholder="Информация о поездках и визах..." value={clientFormData.trips_last5_years || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="relatives_in_destination">Члены семьи за рубежом</Label>
-                      <Textarea id="relatives_in_destination" placeholder="Информация о членах семьи за рубежом..." value={clientFormData.relatives_in_destination || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="trusted_person">Доверенное лицо</Label>
-                      <Input id="trusted_person" placeholder="Доверенное лицо..." value={clientFormData.trusted_person || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="height">Рост</Label>
-                      <Input id="height" type="number" placeholder="Рост (см)..." value={clientFormData.height || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="weight">Вес</Label>
-                      <Input id="weight" type="number" placeholder="Вес (кг)..." value={clientFormData.weight || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="driver_license_categories">Права ВУ (категории)</Label>
-                      <Input id="driver_license_categories" placeholder="Категории водительских прав..." value={clientFormData.driver_license_categories || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="therapist_name">Терапевт</Label>
-                      <Input id="therapist_name" placeholder="ФИО терапевта..." value={clientFormData.therapist_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="clinic_name">Клиника</Label>
-                      <Input id="clinic_name" placeholder="Название клиники..." value={clientFormData.clinic_name || ""} onChange={handleFormChange} />
-                    </div>
-                    <div>
-                      <Label htmlFor="diseases_last3_years">Заболевания / Травмы за последние 3 года</Label>
-                      <Textarea id="diseases_last3_years" placeholder="Информация о заболеваниях и травмах..." value={clientFormData.diseases_last3_years || ""} onChange={handleFormChange} />
-                    </div>
-                    <div className="md:col-span-2 lg:col-span-3">
-                      <Label htmlFor="additional_info">Дополнительная информация</Label>
-                      <Textarea id="additional_info" placeholder="Любая дополнительная информация..." value={clientFormData.additional_info || ""} onChange={handleFormChange} />
+                          <input
+                            id="photo-upload"
+                            type="file"
+                            className="hidden"
+                            accept=".jpg,.jpeg,.png"
+                            onChange={handlePhotoSelect}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

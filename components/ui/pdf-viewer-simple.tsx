@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, ExternalLink } from "lucide-react"
+import { Loader2, Download, ExternalLink, Maximize2, Minimize2 } from "lucide-react"
 import { toast } from "sonner"
-import { downloadDocument } from "@/src/api/documents.api"
+import { downloadDocument, viewDocumentFile } from "@/src/api/documents.api"
+import { renderAsync } from 'docx-preview'
 
 interface PdfViewerProps {
   isOpen: boolean
@@ -17,86 +18,84 @@ interface PdfViewerProps {
 export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfViewerProps) {
   const [loading, setLoading] = useState(true)
   const [pdfUrl, setPdfUrl] = useState<string>("")
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null)
+  const [fileType, setFileType] = useState<'pdf' | 'docx' | null>(null)
   const [error, setError] = useState<string>("")
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const docxContainerRef = useRef<HTMLDivElement>(null)
 
   // Reset state when document changes
   useEffect(() => {
     if (isOpen && documentId) {
       setLoading(true)
       setError("")
-      setPdfUrl("")
-      loadPdfDocument()
+      setFileType(null)
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl)
+        setPdfUrl("")
+      }
+      setDocxBlob(null)
+      loadDocument()
+    }
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl)
+        setPdfUrl("")
+      }
+      setDocxBlob(null)
     }
   }, [isOpen, documentId])
 
-  const loadPdfDocument = async () => {
+  // Render DOCX file
+  useEffect(() => {
+    const renderDocx = async () => {
+      if (fileType === 'docx' && docxBlob && docxContainerRef.current) {
+        try {
+          docxContainerRef.current.innerHTML = ''
+          await renderAsync(docxBlob, docxContainerRef.current, undefined, {
+            className: 'docx-container',
+            inWrapper: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+            ignoreFonts: false,
+            breakPages: true,
+            experimental: false,
+          })
+        } catch (error) {
+          console.error('Error rendering DOCX:', error)
+          setError('Ошибка при отображении DOCX файла')
+        }
+      }
+    }
+    renderDocx()
+  }, [fileType, docxBlob])
+
+  const loadDocument = async () => {
     try {
-      console.log('Loading PDF document:', documentId)
+      const blob = await viewDocumentFile(documentId)
+      const contentType = blob.type
       
-      // Get auth token from localStorage or cookie
-      let token = ''
-      if (typeof window !== 'undefined') {
-        token = localStorage.getItem('auth_token') || 
-                document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1] || ''
-      }
-      
-      // Use our new view endpoint that handles DOCX to PDF conversion
-      const response = await fetch(`/api/documents/${documentId}/view?t=${Date.now()}`, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Cache-Control': 'no-cache',
-        }
-      })
-      
-      console.log('API response status:', response.status)
-      console.log('API response headers:', Object.fromEntries(response.headers.entries()))
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('API error response:', errorText)
-        throw new Error(`Failed to load PDF document: ${response.status} ${errorText}`)
-      }
-      
-      const blob = await response.blob()
-      const contentType = response.headers.get('content-type') || blob.type
-      const conversionError = response.headers.get('x-conversion-error')
-      
-      console.log('Got blob:', contentType, blob.size)
-      console.log('Conversion error header:', conversionError)
-      
-      // Check if conversion failed
-      if (conversionError) {
-        console.log('DOCX to PDF conversion failed')
-        setError(`Не удалось преобразовать DOCX в PDF: ${conversionError}. Попробуйте скачать файл.`)
+      if (contentType && contentType.includes('pdf')) {
+        setFileType('pdf')
+        const url = URL.createObjectURL(blob)
+        setPdfUrl(url)
         setLoading(false)
         return
       }
       
-      // Check if it's actually a PDF
-      if (contentType && !contentType.includes('pdf')) {
-        console.log('File is not a PDF, it\'s:', contentType)
-        
-        // If we get JSON, it means there was an error
-        if (contentType.includes('json')) {
-          const text = await blob.text()
-          console.log('JSON response:', text)
-          setError(`Ошибка сервера: ${text}`)
-        } else {
-          setError(`Файл не является PDF: ${contentType}. Попробуйте скачать файл.`)
-        }
+      if (contentType && (contentType.includes('wordprocessingml') || contentType.includes('docx'))) {
+        setFileType('docx')
+        setDocxBlob(blob)
         setLoading(false)
         return
       }
       
-      const url = URL.createObjectURL(blob)
-      setPdfUrl(url)
+      setError(`Неподдерживаемый формат файла: ${contentType}`)
       setLoading(false)
-      
     } catch (error) {
-      console.error('Error loading PDF:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load PDF')
-      toast.error('Ошибка при загрузке PDF документа')
+      setError(error instanceof Error ? error.message : 'Failed to load document')
+      toast.error('Ошибка при загрузке документа')
       setLoading(false)
     }
   }
@@ -112,10 +111,8 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      
       toast.success('Документ скачан')
     } catch (error) {
-      console.error('Error downloading document:', error)
       toast.error('Ошибка при скачивании документа')
     }
   }
@@ -126,19 +123,10 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
     }
   }
 
-  // Cleanup URL when component unmounts or closes
-  useEffect(() => {
-    return () => {
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl)
-      }
-    }
-  }, [pdfUrl])
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent className={isFullscreen ? "max-w-screen max-h-screen p-0" : "max-w-6xl max-h-[90vh] p-0"}>
+        <DialogHeader className="p-4 pb-2 border-b">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold truncate">
               {documentName || `Документ #${documentId}`}
@@ -149,6 +137,7 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
                 size="sm"
                 onClick={handleOpenInNewTab}
                 disabled={!pdfUrl}
+                title="Открыть в новой вкладке"
               >
                 <ExternalLink className="h-4 w-4" />
               </Button>
@@ -156,41 +145,56 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
                 variant="outline"
                 size="sm"
                 onClick={handleDownload}
+                title="Скачать"
               >
                 <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
+              >
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             </div>
           </div>
         </DialogHeader>
         
         <div className="flex flex-col h-[calc(90vh-8rem)]">
-          {/* PDF Content */}
-          <div className="flex-1 overflow-auto bg-gray-50 p-6">
+          <div className="flex-1 overflow-auto bg-gray-100 p-4">
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                  <p className="text-muted-foreground">Загрузка PDF документа...</p>
+                  <p className="text-muted-foreground">Загрузка документа...</p>
                 </div>
               </div>
             ) : error ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center max-w-md">
                   <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                    <p className="text-red-700 font-medium mb-2">Ошибка загрузки PDF</p>
+                    <p className="text-red-700 font-medium mb-2">Ошибка загрузки документа</p>
                     <p className="text-red-600 text-sm mb-4">{error}</p>
-                    <Button onClick={loadPdfDocument} variant="outline" size="sm">
+                    <Button onClick={loadDocument} variant="outline" size="sm">
                       Попробовать снова
                     </Button>
                   </div>
                 </div>
               </div>
-            ) : pdfUrl ? (
+            ) : fileType === 'pdf' && pdfUrl ? (
               <iframe
+                key={`${documentId}-${pdfUrl}`}
                 ref={iframeRef}
                 src={pdfUrl}
                 className="w-full h-full border border-gray-300 rounded-lg bg-white"
-                title="PDF Document Viewer"
+                title="Document Viewer"
+              />
+            ) : fileType === 'docx' && docxBlob ? (
+              <div 
+                ref={docxContainerRef}
+                className="w-full h-full border border-gray-300 rounded-lg bg-white overflow-auto p-8"
+                key={`${documentId}`}
               />
             ) : null}
           </div>
