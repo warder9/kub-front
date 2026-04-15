@@ -66,6 +66,8 @@ import {
   Building,
   Archive,
   ArchiveRestore,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
@@ -215,7 +217,11 @@ const DetailItem = ({ label, value }: { label: string; value?: string | null }) 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("");
+  const [hasDealsFilter, setHasDealsFilter] = useState("");
+  const [dealStatusGroupFilter, setDealStatusGroupFilter] = useState("all");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [clientFormData, setClientFormData] =
     useState<Models.CreateClientRequest>(EMPTY_CLIENT);
@@ -379,6 +385,40 @@ export default function ClientsPage() {
   const currentPage = Number(searchParams.get('page')) || 1;
   const limit = 20;
 
+  // Initialize filter states from URL
+  useEffect(() => {
+    setHasDealsFilter(searchParams.get('has_deals') || '');
+    setDealStatusGroupFilter(searchParams.get('deal_status_group') || 'all');
+    setSortBy(searchParams.get('sort_by') || 'created_at');
+    setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
+  }, [searchParams]);
+
+  // Update URL when filters change
+  const updateURL = () => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('page', currentPage.toString());
+    if (searchTerm) params.set('q', searchTerm);
+    if (clientTypeFilter) params.set('client_type', clientTypeFilter);
+    if (hasDealsFilter) params.set('has_deals', hasDealsFilter);
+    if (dealStatusGroupFilter !== 'all') params.set('deal_status_group', dealStatusGroupFilter);
+    if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    params.set('sort_by', sortBy);
+    params.set('order', sortOrder);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setSearchTerm('');
+    setClientTypeFilter('');
+    setHasDealsFilter('');
+    setDealStatusGroupFilter('all');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setArchiveFilter('active');
+    router.push(pathname);
+  };
+
   const { toast } = useToast();
   // Remove useMemo - get fresh user data every time
   const [clientView, setClientView] = useState<"all" | "my">(() => {
@@ -418,23 +458,23 @@ export default function ClientsPage() {
         // Transform API response to match User interface
         const transformedUser = {
           id: String(userData.id),
-          firstName: userData.company_name || userData.email?.split('@')[0] || '',
+          firstName: userData.legacy?.company_name || userData.full_name || userData.email?.split('@')[0] || '',
           lastName: '',
           email: userData.email,
           phone: userData.phone,
-          role: userData.role_id === 50 ? 'system_admin' :
-                userData.role_id === 40 ? 'leadership' :
-                userData.role_id === 30 ? 'control' :
-                userData.role_id === 20 ? 'operations' :
-                userData.role_id === 15 ? 'backoffice_admin_staff' :
-                userData.role_id === 10 ? 'sales' : 'user',
-          role_id: userData.role_id,
-          company_name: userData.company_name,
-          bin_iin: userData.bin_iin,
+          role: userData.role.id === 50 ? 'system_admin' :
+                userData.role.id === 40 ? 'leadership' :
+                userData.role.id === 30 ? 'control' :
+                userData.role.id === 20 ? 'operations' :
+                userData.role.id === 15 ? 'backoffice_admin_staff' :
+                userData.role.id === 10 ? 'sales' : 'user',
+          role_id: userData.role.id,
+          company_name: userData.legacy?.company_name,
+          bin_iin: userData.legacy?.bin_iin,
           is_verified: userData.is_verified,
-          verified_at: userData.verified_at,
-          telegram_chat_id: userData.telegram_chat_id,
-          notify_tasks_telegram: userData.notify_tasks_telegram,
+          verified_at: undefined,
+          telegram_chat_id: userData.telegram?.chat_id,
+          notify_tasks_telegram: userData.telegram?.notify_tasks,
           status: 'active'
         };
         
@@ -467,7 +507,11 @@ export default function ClientsPage() {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.q = searchTerm;
       if (clientTypeFilter) params.client_type = clientTypeFilter;
+      if (hasDealsFilter) params.has_deals = hasDealsFilter;
+      if (dealStatusGroupFilter !== 'all') params.deal_status_group = dealStatusGroupFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
+      params.sort_by = sortBy;
+      params.order = sortOrder;
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
@@ -559,19 +603,6 @@ export default function ClientsPage() {
 
       let data = Array.isArray(res) ? res : (res as any)?.data || [];
       let total = (res as any)?.total || data.length;
-
-      // Client-side filtering as fallback if backend doesn't support search
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        data = data.filter((client: any) =>
-          client.name?.toLowerCase().includes(term) ||
-          client.first_name?.toLowerCase().includes(term) ||
-          client.last_name?.toLowerCase().includes(term) ||
-          client.email?.toLowerCase().includes(term) ||
-          client.phone?.toLowerCase().includes(term)
-        );
-        total = data.length;
-      }
 
       console.log('Processed data:', {
         dataLength: data.length,
@@ -666,7 +697,12 @@ useEffect(() => {
     } else {
       console.log('No user - skipping fetchClients');
     }
-  }, [clientView, currentPage, clientTypeFilter, archiveFilter]); // Remove user from deps - we get fresh data in fetchClients
+  }, [clientView, currentPage, clientTypeFilter, hasDealsFilter, dealStatusGroupFilter, archiveFilter, sortBy, sortOrder]); // Remove user from deps - we get fresh data in fetchClients
+
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL();
+  }, [clientTypeFilter, hasDealsFilter, dealStatusGroupFilter, archiveFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     console.log('=== USEEFFECT 3: Search Debounce ===');
@@ -676,7 +712,7 @@ useEffect(() => {
       fetchClients(); // Always call fetchClients - it will get fresh user data
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, archiveFilter]); // Remove user from deps
+  }, [searchTerm]); // Remove user from deps
 
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -1260,51 +1296,108 @@ useEffect(() => {
       </div>
 
       <Card className="mb-6 overflow-visible">
-        <CardContent className="p-4 flex flex-col sm:flex-row gap-4 overflow-visible">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Введите данные для поиска..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 overflow-visible">
-            <div className="w-48 relative overflow-visible">
-              <CustomSelect
-                value={clientTypeFilter}
-                onChange={(value) => setClientTypeFilter(value)}
-                placeholder="Тип клиента"
-                options={[
-                  { value: "", label: "Все типы" },
-                  { value: "individual", label: "Физическое лицо" },
-                  { value: "legal", label: "Юридическое лицо" },
-                ]}
-              />
+        <CardContent className="p-4 overflow-visible">
+          <div className="flex flex-col gap-4 overflow-visible">
+            {/* Primary filters row */}
+            <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Введите данные для поиска..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="w-48 relative overflow-visible">
+                <CustomSelect
+                  value={clientTypeFilter}
+                  onChange={(value) => setClientTypeFilter(value)}
+                  placeholder="Тип клиента"
+                  options={[
+                    { value: "", label: "Все типы" },
+                    { value: "individual", label: "Физическое лицо" },
+                    { value: "legal", label: "Юридическое лицо" },
+                  ]}
+                />
+              </div>
+              <div className="w-48 overflow-visible">
+                <ArchiveFilter
+                  value={archiveFilter}
+                  onChange={setArchiveFilter}
+                />
+              </div>
+              <div className="w-48 overflow-visible">
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={sortBy}
+                    onChange={setSortBy}
+                    placeholder="Сортировка"
+                    options={[
+                      { value: "created_at", label: "Дата создания" },
+                      { value: "name", label: "Имя" },
+                      { value: "display_name", label: "Отображаемое имя" },
+                      { value: "client_type", label: "Тип клиента" },
+                    ]}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <Button variant="outline" onClick={resetFilters}>
+                Сбросить
+              </Button>
             </div>
-            <div className="w-48 overflow-visible">
-              <ArchiveFilter
-                value={archiveFilter}
-                onChange={setArchiveFilter}
-              />
-            </div>
-            {user?.role !== 'sales' && (
+            {/* Secondary filters row */}
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0 overflow-visible">
+              <div className="w-48 overflow-visible">
+                <CustomSelect
+                  value={hasDealsFilter}
+                  onChange={setHasDealsFilter}
+                  placeholder="Сделки"
+                  options={[
+                    { value: "", label: "Все" },
+                    { value: "true", label: "Со сделками" },
+                    { value: "false", label: "Без сделок" },
+                  ]}
+                />
+              </div>
+              <div className="w-48 overflow-visible">
+                <CustomSelect
+                  value={dealStatusGroupFilter}
+                  onChange={setDealStatusGroupFilter}
+                  placeholder="Статус сделок"
+                  options={[
+                    { value: "all", label: "Все статусы" },
+                    { value: "active", label: "Активные" },
+                    { value: "completed", label: "Завершенные" },
+                    { value: "closed", label: "Закрытые" },
+                  ]}
+                />
+              </div>
+              {user?.role !== 'sales' && (
+                <Button
+                  variant={clientView === "all" ? "secondary" : "outline"}
+                  onClick={() => setClientView("all")}
+                  className="whitespace-nowrap"
+                >
+                  Все клиенты
+                </Button>
+              )}
               <Button
-                variant={clientView === "all" ? "secondary" : "outline"}
-                onClick={() => setClientView("all")}
+                variant={clientView === "my" ? "secondary" : "outline"}
+                onClick={() => setClientView("my")}
                 className="whitespace-nowrap"
               >
-                Все клиенты
+                Мои клиенты
               </Button>
-            )}
-            <Button
-              variant={clientView === "my" ? "secondary" : "outline"}
-              onClick={() => setClientView("my")}
-              className="whitespace-nowrap"
-            >
-              Мои клиенты
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

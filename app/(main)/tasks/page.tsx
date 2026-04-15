@@ -83,6 +83,8 @@ import {
   XCircle,
   Archive,
   ArchiveRestore,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -246,7 +248,14 @@ export default function TasksPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [statusGroupFilter, setStatusGroupFilter] = useState("all");
+  const [assigneeIdFilter, setAssigneeIdFilter] = useState("");
+  const [creatorIdFilter, setCreatorIdFilter] = useState("");
+  const [entityIdFilter, setEntityIdFilter] = useState("");
+  const [entityTypeFilter, setEntityTypeFilter] = useState("");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [users, setUsers] = useState<any[]>([])
   const [deals, setDeals] = useState<any[]>([])
@@ -293,14 +302,58 @@ export default function TasksPage() {
   const currentPage = Number(searchParams.get("page")) || 1
   const limit = 20
 
+  // Initialize filter states from URL
+  useEffect(() => {
+    setStatusGroupFilter(searchParams.get('status_group') || 'all');
+    setAssigneeIdFilter(searchParams.get('assignee_id') || '');
+    setCreatorIdFilter(searchParams.get('creator_id') || '');
+    setEntityIdFilter(searchParams.get('entity_id') || '');
+    setEntityTypeFilter(searchParams.get('entity_type') || '');
+    setSortBy(searchParams.get('sort_by') || 'created_at');
+    setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
+  }, [searchParams]);
+
+  // Update URL when filters change
+  const updateURL = () => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('page', currentPage.toString());
+    if (searchTerm) params.set('q', searchTerm);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (statusGroupFilter !== 'all') params.set('status_group', statusGroupFilter);
+    if (assigneeIdFilter) params.set('assignee_id', assigneeIdFilter);
+    if (creatorIdFilter) params.set('creator_id', creatorIdFilter);
+    if (entityIdFilter) params.set('entity_id', entityIdFilter);
+    if (entityTypeFilter) params.set('entity_type', entityTypeFilter);
+    if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    params.set('sort_by', sortBy);
+    params.set('order', sortOrder);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setStatusGroupFilter('all');
+    setAssigneeIdFilter('');
+    setCreatorIdFilter('');
+    setEntityIdFilter('');
+    setEntityTypeFilter('');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setArchiveFilter('active');
+    router.push(pathname);
+  };
+
   // Fetch user data and permissions
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         const userData = await getMe();
         setUser(userData);
-        // Use role_id and map it to role name like the sidebar does
-        const userRole = getRoleFromId(userData.role_id);
+        // Use role.id and map it to role name like the sidebar does
+        const roleId = (userData as any)?.role?.id || (userData as any)?.role_id || 0;
+        const userRole = getRoleFromId(roleId);
         const hasWriteAccess = userData && hasPermission(userRole, ["tasks:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -308,7 +361,8 @@ export default function TasksPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        const roleId = (localUser as any)?.role?.id || (localUser as any)?.role_id || 0;
+        const userRole = localUser ? getRoleFromId(roleId) : undefined;
         setCanWrite(!!(localUser && hasPermission(userRole, ["tasks:write"])));
       }
     };
@@ -324,7 +378,14 @@ export default function TasksPage() {
       const params: any = { page: currentPage, size: limit }
       if (searchTerm) params.q = searchTerm
       if (statusFilter !== "all") params.status = statusFilter
+      if (statusGroupFilter !== "all") params.status_group = statusGroupFilter
+      if (assigneeIdFilter) params.assignee_id = assigneeIdFilter
+      if (creatorIdFilter) params.creator_id = creatorIdFilter
+      if (entityIdFilter) params.entity_id = entityIdFilter
+      if (entityTypeFilter) params.entity_type = entityTypeFilter
       if (archiveFilter !== "active") params.archive = archiveFilter
+      params.sort_by = sortBy
+      params.order = sortOrder
 
       // Prevent sales users from accessing full tasks list
       // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
@@ -340,34 +401,6 @@ export default function TasksPage() {
       const res = await list_tasks(undefined, params)
       let data = Array.isArray(res) ? res : (res as any)?.data || []
       let total = (res as any)?.total || data.length
-
-      // Client-side filtering as fallback if backend doesn't support search
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase()
-        data = data.filter((task: any) =>
-          task.title?.toLowerCase().includes(term) ||
-          task.description?.toLowerCase().includes(term)
-        )
-        total = data.length
-      }
-
-      // Client-side filtering as fallback if backend doesn't support status filter
-      if (statusFilter !== "all") {
-        const filteredData = data.filter((task: any) => task.status === statusFilter);
-        // Only use filtered count if backend didn't filter
-        if (filteredData.length !== data.length) {
-          console.log('Backend did not filter by status, applying client-side filter');
-          data = filteredData;
-          total = filteredData.length;
-        }
-      }
-
-      console.log('Tasks response:', {
-        userRole: currentUser?.role,
-        totalTasks: data.length,
-        tasks: data.slice(0, 3), // Show first 3 tasks for debugging
-        responseTotal: total
-      });
 
       setTasks(data)
       setTotalTasks(total)
@@ -725,7 +758,12 @@ export default function TasksPage() {
     if (currentUser) {
       fetchTasks();
     }
-  }, [currentPage, statusFilter, archiveFilter, currentUser])
+  }, [currentPage, statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder, currentUser])
+
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL();
+  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -734,7 +772,7 @@ export default function TasksPage() {
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchTerm, archiveFilter, currentUser])
+  }, [searchTerm, currentUser])
 
   // ─── Skeleton Loading ────────────────────────────────────────
 
@@ -828,35 +866,129 @@ export default function TasksPage() {
       {/* Search */}
       <Card className="mb-6 mx-6 overflow-visible">
         <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Поиск по названию или описанию..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <div className="flex flex-col gap-4 overflow-visible">
+            {/* Primary filters row */}
+            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Поиск по названию или описанию..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <CustomSelect
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  placeholder="Статус"
+                  options={[
+                    { value: "all", label: "Все статусы" },
+                    { value: "new", label: "Новая" },
+                    { value: "in_progress", label: "В работе" },
+                    { value: "done", label: "Выполнена" },
+                    { value: "cancelled", label: "Отменена" },
+                  ]}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <CustomSelect
+                  value={statusGroupFilter}
+                  onChange={setStatusGroupFilter}
+                  placeholder="Группа статусов"
+                  options={[
+                    { value: "all", label: "Все группы" },
+                    { value: "active", label: "Активные" },
+                    { value: "closed", label: "Закрытые" },
+                  ]}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <ArchiveFilter
+                  value={archiveFilter}
+                  onChange={setArchiveFilter}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={sortBy}
+                    onChange={setSortBy}
+                    placeholder="Сортировка"
+                    options={[
+                      { value: "created_at", label: "Дата создания" },
+                      { value: "due_date", label: "Срок выполнения" },
+                      { value: "priority", label: "Приоритет" },
+                      { value: "status", label: "Статус" },
+                      { value: "title", label: "Название" },
+                    ]}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="w-full sm:w-auto">
+                <Button variant="outline" onClick={resetFilters}>
+                  Сбросить
+                </Button>
+              </div>
             </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <CustomSelect
-                value={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Статус"
-                options={[
-                  { value: "all", label: "Все статусы" },
-                  { value: "new", label: "Новая" },
-                  { value: "in_progress", label: "В работе" },
-                  { value: "done", label: "Выполнена" },
-                  { value: "cancelled", label: "Отменена" },
-                ]}
-              />
-            </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <ArchiveFilter
-                value={archiveFilter}
-                onChange={setArchiveFilter}
-              />
+            {/* Secondary filters row */}
+            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+              <div className="w-full sm:w-48 overflow-visible">
+                <ComboboxSelect
+                  value={assigneeIdFilter}
+                  onChange={setAssigneeIdFilter}
+                  placeholder="Исполнитель"
+                  searchPlaceholder="Поиск пользователя..."
+                  emptyText="Пользователь не найден"
+                  options={users.map((user) => ({
+                    value: user.id.toString(),
+                    label: user.full_name || `Пользователь #${user.id}`
+                  }))}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <ComboboxSelect
+                  value={creatorIdFilter}
+                  onChange={setCreatorIdFilter}
+                  placeholder="Создатель"
+                  searchPlaceholder="Поиск пользователя..."
+                  emptyText="Пользователь не найден"
+                  options={users.map((user) => ({
+                    value: user.id.toString(),
+                    label: user.full_name || `Пользователь #${user.id}`
+                  }))}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <Input
+                  placeholder="ID сущности"
+                  value={entityIdFilter}
+                  onChange={(e) => setEntityIdFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <CustomSelect
+                  value={entityTypeFilter}
+                  onChange={setEntityTypeFilter}
+                  placeholder="Тип сущности"
+                  options={[
+                    { value: "", label: "Все типы" },
+                    { value: "lead", label: "Лид" },
+                    { value: "deal", label: "Сделка" },
+                    { value: "client", label: "Клиент" },
+                  ]}
+                />
+              </div>
             </div>
           </div>
         </CardContent>

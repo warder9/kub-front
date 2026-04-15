@@ -71,6 +71,8 @@ import {
   Calendar,
   Archive,
   ArchiveRestore,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
@@ -108,11 +110,18 @@ export default function LeadsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [statusGroupFilter, setStatusGroupFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
   const [view, setView] = useState<"all" | "my">(() => {
     // Default to "my" only for sales users, others get "all"
     const user = getCurrentUser();
-    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    let roleId = 0;
+    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+      roleId = (user.role as any).id;
+    }
+    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
     return userRole === 'sales' ? 'my' : 'all';
   });
 
@@ -169,8 +178,8 @@ export default function LeadsPage() {
       try {
         const userData = await getMe();
         setUser(userData);
-        // Use role_id and map it to role name like the sidebar does
-        const userRole = getRoleFromId(userData.role_id);
+        // Use role.id and map it to role name like the sidebar does
+        const userRole = getRoleFromId(userData.role.id);
         const hasWriteAccess = userData && hasPermission(userRole, ["leads:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -178,7 +187,14 @@ export default function LeadsPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        // Handle role as either object with id or string
+        let roleId = 0;
+        if (localUser?.role) {
+          if (typeof localUser.role === 'object' && 'id' in localUser.role) {
+            roleId = (localUser.role as any).id;
+          }
+        }
+        const userRole = localUser ? getRoleFromId(roleId || 0) : undefined;
         setCanWrite(!!(localUser && hasPermission(userRole, ["leads:write"])));
       }
     };
@@ -188,7 +204,11 @@ export default function LeadsPage() {
 
   // Force sales users to use "my" view - immediate check
   useEffect(() => {
-    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    let roleId = 0;
+    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+      roleId = (user.role as any).id;
+    }
+    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
     if (userRole === 'sales' && view === 'all') {
       setView('my');
     }
@@ -197,7 +217,11 @@ export default function LeadsPage() {
   // Additional safety check - force sales users immediately on mount
   useEffect(() => {
     const currentUser = getCurrentUser();
-    const userRole = currentUser ? getRoleFromId(currentUser.role_id || 0) : undefined;
+    let roleId = 0;
+    if (currentUser?.role && typeof currentUser.role === 'object' && 'id' in currentUser.role) {
+      roleId = (currentUser.role as any).id;
+    }
+    const userRole = currentUser ? getRoleFromId(roleId || 0) : undefined;
     if (userRole === 'sales') {
       setView('my');
     }
@@ -212,39 +236,57 @@ export default function LeadsPage() {
   const limit = 20;
   const [totalLeads, setTotalLeads] = useState(0);
 
+  // Initialize filter states from URL
+  useEffect(() => {
+    setStatusGroupFilter(searchParams.get('status_group') || 'all');
+    setSortBy(searchParams.get('sort_by') || 'created_at');
+    setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
+  }, [searchParams]);
+
+  // Update URL when filters change
+  const updateURL = () => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('page', currentPage.toString());
+    if (searchTerm) params.set('q', searchTerm);
+    if (statusGroupFilter !== 'all') params.set('status_group', statusGroupFilter);
+    if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    params.set('sort_by', sortBy);
+    params.set('order', sortOrder);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setStatusGroupFilter('all');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setSearchTerm('');
+    setArchiveFilter('active');
+    router.push(pathname);
+  };
+
   const fetchLeads = async () => {
     console.log('fetchLeads called with view:', view, 'user:', user);
     setIsLoading(true);
     try {
       // Default to "my" view only for sales users
-      const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+      let roleId = 0;
+      if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+        roleId = (user.role as any).id;
+      }
+      const userRole = user ? getRoleFromId(roleId || 0) : undefined;
       const shouldUseMyView = view === "my" || userRole === 'sales';
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, size: limit };
-      if (statusFilter !== "all") params.status = statusFilter;
+      if (searchTerm) params.q = searchTerm;
+      if (statusGroupFilter !== "all") params.status_group = statusGroupFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
+      params.sort_by = sortBy;
+      params.order = sortOrder;
 
       const res = await fetchFn(undefined, params);
       let data = (res?.data || (Array.isArray(res) ? res : []));
       let total = res?.total || data.length;
-
-      // Client-side filtering as fallback if backend doesn't support search
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const filteredData = data.filter((lead: Lead) =>
-          lead.title?.toLowerCase().includes(term) ||
-          lead.description?.toLowerCase().includes(term)
-        );
-        data = filteredData;
-        total = filteredData.length;
-      }
-
-      // Client-side filtering as fallback if backend doesn't support status filter
-      if (statusFilter !== "all") {
-        const filteredData = data.filter((lead: Lead) => lead.status === statusFilter);
-        data = filteredData;
-        total = filteredData.length;
-      }
 
       setLeads(data);
       setTotalLeads(total);
@@ -265,7 +307,11 @@ export default function LeadsPage() {
 
   const fetchUsers = async () => {
     // Sales users typically don't need to see all users for assignment
-    const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+    let roleId = 0;
+    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+      roleId = (user.role as any).id;
+    }
+    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
     if (userRole === 'sales') {
       setUsers([]);
       return;
@@ -288,16 +334,17 @@ export default function LeadsPage() {
 
   const fetchClients = async () => {
     try {
-      const userRole = user ? getRoleFromId(user.role_id || 0) : undefined;
+      let roleId = 0;
+      if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+        roleId = (user.role as any).id;
+      }
+      const userRole = user ? getRoleFromId(roleId || 0) : undefined;
       const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
       const res = await fetchFn({ page: 1, size: 100 });
       const data = Array.isArray(res) ? res : (res as any)?.data || [];
       setClientsList(data);
     } catch (err: any) {
-      console.error("Error loading clients:", err);
-      if (err?.response?.status === 403) {
-        setClientsList([]);
-      }
+      console.error("Failed to fetch clients:", err);
     }
   };
 
@@ -322,7 +369,12 @@ export default function LeadsPage() {
       fetchLeads();
     }, 300);
     return () => clearTimeout(timer);
-  }, [view, currentPage, searchTerm, statusFilter, archiveFilter]);
+  }, [view, currentPage, searchTerm, statusGroupFilter, archiveFilter, sortBy, sortOrder]);
+
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL();
+  }, [statusGroupFilter, archiveFilter, sortBy, sortOrder]);
 
   const getStatusBadge = (status: LeadStatus) => {
     const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
@@ -600,7 +652,7 @@ export default function LeadsPage() {
     }
   };
 
-  const isAdmin = user?.role_id === 50;
+  const isAdmin = user?.role && typeof user.role === 'object' && 'id' in user.role ? (user.role as any).id === 50 : false;
 
   if (isLoading && (!leads || leads.length === 0)) {
     return (
@@ -751,7 +803,14 @@ export default function LeadsPage() {
               </div>
             </div>
             {/* View selector - only for non-sales users */}
-            {user && getRoleFromId(user.role_id || 0) !== 'sales' && (
+            {(() => {
+              let roleId = 0;
+              if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+                roleId = (user.role as any).id;
+              }
+              const userRole = getRoleFromId(roleId || 0);
+              return user && userRole !== 'sales';
+            })() && (
               <div className="w-full sm:w-48 overflow-visible">
                 <CustomSelect
                   value={view}
@@ -766,15 +825,13 @@ export default function LeadsPage() {
             )}
             <div className="w-full sm:w-48 overflow-visible">
               <CustomSelect
-                value={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Статус"
+                value={statusGroupFilter}
+                onChange={setStatusGroupFilter}
+                placeholder="Группа статусов"
                 options={[
                   { value: "all", label: "Все статусы" },
-                  ...allStatuses.map(status => ({
-                    value: status,
-                    label: statusTranslations[status]
-                  }))
+                  { value: "active", label: "Активные" },
+                  { value: "closed", label: "Закрытые" },
                 ]}
               />
             </div>
@@ -783,6 +840,33 @@ export default function LeadsPage() {
                 value={archiveFilter}
                 onChange={setArchiveFilter}
               />
+            </div>
+            <div className="w-full sm:w-48 overflow-visible">
+              <div className="flex gap-2">
+                <CustomSelect
+                  value={sortBy}
+                  onChange={setSortBy}
+                  placeholder="Сортировка"
+                  options={[
+                    { value: "created_at", label: "Дата создания" },
+                    { value: "status", label: "Статус" },
+                    { value: "title", label: "Название" },
+                  ]}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                >
+                  {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="w-full sm:w-auto">
+              <Button variant="outline" onClick={resetFilters}>
+                Сбросить
+              </Button>
             </div>
           </div>
         </CardContent>

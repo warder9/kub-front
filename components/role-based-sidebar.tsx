@@ -320,6 +320,20 @@ function getRoleFromId(roleId: number): string {
   return roleMapping[roleId] || 'user'
 }
 
+function normalizeRoleCode(roleCode: string): string {
+  // Map backend role codes to sidebar keys
+  const codeMapping: Record<string, string> = {
+    'system_admin': 'system_admin',
+    'leadership': 'leadership',
+    'management': 'leadership', // legacy_name mapping
+    'control': 'control',
+    'operations': 'operations',
+    'backoffice_admin_staff': 'backoffice_admin_staff',
+    'sales': 'sales',
+  }
+  return codeMapping[roleCode] || roleCode
+}
+
 function getRoleDisplayName(roleKey: string): string {
   const roleDisplayNames: Record<string, string> = {
     'system_admin': 'Системный администратор',
@@ -354,7 +368,7 @@ export function RoleBasedSidebar() {
         
         // Only fetch roles if user is system_admin (to avoid 403 errors for other roles)
         let roles: { id: number, name: string }[] = [];
-        if (userDataResult.role_id === 50) { // system_admin
+        if (userDataResult.role.id === 50) { // system_admin
           try {
             const rolesData = await RolesAPI.listRoles({ limit: 100 });
             roles = Array.isArray(rolesData) ? rolesData : rolesData.data || [];
@@ -368,19 +382,19 @@ export function RoleBasedSidebar() {
         const userValue = userDataResult;
         console.log('=== ROLE DEBUG ===');
         console.log('Raw userData:', userValue);
-        console.log('User role_id (type):', userValue.role_id, typeof userValue.role_id);
+        console.log('User role.id (type):', userValue.role.id, typeof userValue.role.id);
         console.log('Available roles from API:', roles);
         console.log('Role IDs in available roles:', roles.map(r => ({ id: r.id, name: r.name })));
         
-        const role = roles.find(r => r.id === userValue.role_id);
+        const role = roles.find(r => r.id === userValue.role.id);
         console.log('Found role in API roles:', role);
         
         // Show what admin panel would display
         const adminPanelRoleName = role ? role.name : "Неизвестная роль";
         console.log('Admin panel would show:', adminPanelRoleName);
         
-        // Use API role name to match admin panel, fallback to hardcoded mapping
-        const roleKey = role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userValue.role_id);
+        // Use API role code to match admin panel, fallback to hardcoded mapping
+        const roleKey = normalizeRoleCode(userValue.role.code) || (role ? role.name.toLowerCase().replace(' ', '_') : getRoleFromId(userValue.role.id));
         setUserRole(roleKey);
         console.log('Using role key:', roleKey);
         console.log('Display name will be:', adminPanelRoleName || getRoleDisplayName(roleKey));
@@ -405,14 +419,15 @@ export function RoleBasedSidebar() {
   if (!user) return null;
 
   // Get role key for permissions (fallback to hardcoded mapping for permissions)
-  const userRoleKey = getRoleFromId(user.role_id);
+  const userRoleKey = normalizeRoleCode(user.role.code) || getRoleFromId(user.role.id);
   
   // Get display name from API to match admin panel, fallback to hardcoded mapping
-  const apiRoleName = availableRoles.find(r => r.id === user.role_id)?.name;
-  const displayRole = apiRoleName || getRoleDisplayName(userRoleKey);
+  const apiRoleName = availableRoles.find(r => r.id === user.role.id)?.name;
+  const displayRole = apiRoleName || user.role.legacy_name || getRoleDisplayName(userRoleKey);
   
   console.log('Final role display:', {
-    roleId: user.role_id,
+    roleId: user.role.id,
+    roleCode: user.role.code,
     apiRoleName,
     fallbackName: getRoleDisplayName(userRoleKey),
     finalDisplay: displayRole
@@ -474,11 +489,11 @@ export function RoleBasedSidebar() {
           <Link href="/profile" className="block">
             <div className="flex items-center space-x-3 mb-3 hover:bg-slate-50 rounded-lg p-2 transition-all duration-200 cursor-pointer">
               <div className="w-10 h-10 gradient-primary rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
-                {user.company_name[0]}
+                {user.legacy?.company_name?.[0] || user.full_name?.[0] || user.email?.[0] || 'U'}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-900 truncate">
-                  {user?.company_name}
+                  {user?.full_name || user?.legacy?.company_name}
                 </p>
                 <p className="text-xs text-slate-500 truncate">
                   {user?.email}

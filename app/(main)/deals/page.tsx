@@ -65,6 +65,8 @@ import {
   ChevronUp,
   ChevronsUpDown,
   Check,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
@@ -96,7 +98,14 @@ export default function DealsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [statusGroupFilter, setStatusGroupFilter] = useState("all");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [deals, setDeals] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -160,8 +169,9 @@ export default function DealsPage() {
       try {
         const userData = await getMe();
         setUser(userData);
-        // Use role_id and map it to role name like the sidebar does
-        const userRole = getRoleFromId(userData.role_id);
+        // Use role.id and map it to role name like the sidebar does
+        const roleId = (userData as any)?.role?.id || (userData as any)?.role_id || 0;
+        const userRole = getRoleFromId(roleId);
         const hasWriteAccess = userData && hasPermission(userRole, ["deals:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -169,7 +179,8 @@ export default function DealsPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const userRole = localUser ? getRoleFromId(localUser.role_id || 0) : undefined;
+        const roleId = (localUser as any)?.role?.id || (localUser as any)?.role_id || 0;
+        const userRole = localUser ? getRoleFromId(roleId) : undefined;
         setCanWrite(!!(localUser && hasPermission(userRole, ["deals:write"])));
       }
     };
@@ -215,6 +226,49 @@ export default function DealsPage() {
   const limit = 20;
   const [totalDeals, setTotalDeals] = useState(0);
 
+  // Initialize filter states from URL
+  useEffect(() => {
+    setStatusGroupFilter(searchParams.get('status_group') || 'all');
+    setAmountMin(searchParams.get('amount_min') || '');
+    setAmountMax(searchParams.get('amount_max') || '');
+    setCurrencyFilter(searchParams.get('currency') || '');
+    setClientFilter(searchParams.get('client_id') || '');
+    setSortBy(searchParams.get('sort_by') || 'created_at');
+    setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
+  }, [searchParams]);
+
+  // Update URL when filters change
+  const updateURL = () => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('page', currentPage.toString());
+    if (searchTerm) params.set('q', searchTerm);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (statusGroupFilter !== 'all') params.set('status_group', statusGroupFilter);
+    if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    if (amountMin) params.set('amount_min', amountMin);
+    if (amountMax) params.set('amount_max', amountMax);
+    if (currencyFilter) params.set('currency', currencyFilter);
+    if (clientFilter) params.set('client_id', clientFilter);
+    params.set('sort_by', sortBy);
+    params.set('order', sortOrder);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setStatusFilter('all');
+    setStatusGroupFilter('all');
+    setAmountMin('');
+    setAmountMax('');
+    setCurrencyFilter('');
+    setClientFilter('');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setSearchTerm('');
+    setArchiveFilter('active');
+    router.push(pathname);
+  };
+
   const fetchDeals = async () => {
     setIsLoading(true);
     try {
@@ -222,7 +276,14 @@ export default function DealsPage() {
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.q = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (statusGroupFilter !== "all") params.status_group = statusGroupFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
+      if (amountMin) params.amount_min = amountMin;
+      if (amountMax) params.amount_max = amountMax;
+      if (currencyFilter) params.currency = currencyFilter;
+      if (clientFilter) params.client_id = clientFilter;
+      params.sort_by = sortBy;
+      params.order = sortOrder;
 
       // Get current user data directly to ensure we have the latest role
       const currentUser = getCurrentUser();
@@ -256,23 +317,6 @@ export default function DealsPage() {
         : await list_my_deals(undefined, params);
       let data = (res?.data || (Array.isArray(res) ? res : []));
       let total = res?.total || data.length;
-
-      // Client-side filtering as fallback if backend doesn't support search
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        data = data.filter((deal: any) =>
-          deal.amount?.toString().includes(term) ||
-          getClientName(deal.client_id).toLowerCase().includes(term) ||
-          getLeadTitle(deal.lead_id).toLowerCase().includes(term)
-        );
-        total = data.length;
-      }
-
-      // Client-side filtering as fallback if backend doesn't support status filter
-      if (statusFilter !== "all") {
-        data = data.filter((deal: any) => deal.status === statusFilter);
-        total = data.length;
-      }
 
       setDeals(data);
       setTotalDeals(total);
@@ -549,7 +593,12 @@ export default function DealsPage() {
     if (user) {
       fetchDeals();
     }
-  }, [currentPage, statusFilter, archiveFilter, user]);
+  }, [currentPage, statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder, user]);
+
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL();
+  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder]);
 
   // Debug state changes
   useEffect(() => {
@@ -568,13 +617,12 @@ export default function DealsPage() {
     const timer = setTimeout(() => {
       // Only fetch if user is loaded
       if (user) {
-        if (searchTerm !== "") fetchDeals();
-        else fetchDeals(); // Fetch all if search cleared
+        fetchDeals();
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, archiveFilter, user]);
+  }, [searchTerm, user]);
 
   // Reset new deal form
   const resetNewDealForm = () => {
@@ -1057,39 +1105,134 @@ export default function DealsPage() {
       {/* Filters */}
       <Card className="mb-6 overflow-visible">
         <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Введите сумму, имя клиента..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+          <div className="flex flex-col gap-4 overflow-visible">
+            {/* Primary filters row */}
+            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Поиск по клиенту, ИИН/БИН, телефону, email, сумме..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <CustomSelect
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  placeholder="Статус"
+                  className="w-full"
+                  options={[
+                    { value: "all", label: "Все статусы" },
+                    { value: "new", label: "Новая" },
+                    { value: "in_progress", label: "В работе" },
+                    { value: "negotiation", label: "Переговоры" },
+                    { value: "won", label: "Выиграна" },
+                    { value: "lost", label: "Проиграна" },
+                    { value: "cancelled", label: "Отменена" },
+                  ]}
                 />
               </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <CustomSelect
+                  value={statusGroupFilter}
+                  onChange={setStatusGroupFilter}
+                  placeholder="Группа статусов"
+                  className="w-full"
+                  options={[
+                    { value: "all", label: "Все группы" },
+                    { value: "active", label: "Активные" },
+                    { value: "completed", label: "Завершенные" },
+                    { value: "closed", label: "Закрытые" },
+                  ]}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <ArchiveFilter
+                  value={archiveFilter}
+                  onChange={setArchiveFilter}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={sortBy}
+                    onChange={setSortBy}
+                    placeholder="Сортировка"
+                    options={[
+                      { value: "created_at", label: "Дата создания" },
+                      { value: "amount", label: "Сумма" },
+                      { value: "status", label: "Статус" },
+                      { value: "client_name", label: "Имя клиента" },
+                    ]}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="w-full sm:w-auto">
+                <Button variant="outline" onClick={resetFilters}>
+                  Сбросить
+                </Button>
+              </div>
             </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <CustomSelect
-                value={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Статус"
-                className="w-full"
-                options={[
-                  { value: "all", label: "Все статусы" },
-                  { value: "new", label: "Новая" },
-                  { value: "in_progress", label: "В работе" },
-                  { value: "won", label: "Выиграна" },
-                  { value: "lost", label: "Проиграна" },
-                  { value: "cancelled", label: "Отменена" },
-                ]}
-              />
-            </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <ArchiveFilter
-                value={archiveFilter}
-                onChange={setArchiveFilter}
-              />
+            {/* Secondary filters row */}
+            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+              <div className="w-full sm:w-32 overflow-visible">
+                <Input
+                  placeholder="Сумма от"
+                  type="number"
+                  value={amountMin}
+                  onChange={(e) => setAmountMin(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="w-full sm:w-32 overflow-visible">
+                <Input
+                  placeholder="Сумма до"
+                  type="number"
+                  value={amountMax}
+                  onChange={(e) => setAmountMax(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="w-full sm:w-40 overflow-visible">
+                <CustomSelect
+                  value={currencyFilter}
+                  onChange={setCurrencyFilter}
+                  placeholder="Валюта"
+                  className="w-full"
+                  options={[
+                    { value: "", label: "Все валюты" },
+                    { value: "KZT", label: "KZT" },
+                    { value: "USD", label: "USD" },
+                    { value: "EUR", label: "EUR" },
+                    { value: "RUB", label: "RUB" },
+                  ]}
+                />
+              </div>
+              <div className="w-full sm:w-48 overflow-visible">
+                <ComboboxSelect
+                  value={clientFilter}
+                  onChange={setClientFilter}
+                  placeholder="Клиент"
+                  searchPlaceholder="Поиск клиента..."
+                  emptyText="Клиент не найден"
+                  options={clients.map((client) => ({
+                    value: client.id.toString(),
+                    label: client.name || `Клиент #${client.id}`
+                  }))}
+                />
+              </div>
             </div>
           </div>
         </CardContent>

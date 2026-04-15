@@ -73,6 +73,7 @@ import {
     RefreshCw,
     Eye,
     Send,
+    Search,
     CheckCircle,
     XCircle,
     PenTool,
@@ -93,6 +94,8 @@ import {
     MessageCircle,
     Archive,
     ArchiveRestore,
+    ArrowUp,
+    ArrowDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -354,8 +357,14 @@ export default function DocumentsPage() {
 
     const [documents, setDocuments] = useState<Document[]>([])
     const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
+    const [docTypeFilter, setDocTypeFilter] = useState("");
     const [dealIdFilter, setDealIdFilter] = useState("");
+    const [clientIdFilter, setClientIdFilter] = useState("");
+    const [clientTypeFilter, setClientTypeFilter] = useState("");
     const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+    const [sortBy, setSortBy] = useState("created_at");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [totalDocuments, setTotalDocuments] = useState(0)
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState(false)
@@ -382,23 +391,23 @@ export default function DocumentsPage() {
                 // Transform API response to match User interface
                 const transformedUser = {
                     id: String(userData.id),
-                    firstName: userData.company_name || userData.email?.split('@')[0] || '',
+                    firstName: userData.legacy?.company_name || userData.full_name || userData.email?.split('@')[0] || '',
                     lastName: '',
                     email: userData.email,
                     phone: userData.phone,
-                    role: userData.role_id === 50 ? 'system_admin' :
-                          userData.role_id === 40 ? 'leadership' :
-                          userData.role_id === 30 ? 'control' :
-                          userData.role_id === 20 ? 'operations' :
-                          userData.role_id === 15 ? 'backoffice_admin_staff' :
-                          userData.role_id === 10 ? 'sales' : 'user',
-                    role_id: userData.role_id,
-                    company_name: userData.company_name,
-                    bin_iin: userData.bin_iin,
+                    role: userData.role.id === 50 ? 'system_admin' :
+                          userData.role.id === 40 ? 'leadership' :
+                          userData.role.id === 30 ? 'control' :
+                          userData.role.id === 20 ? 'operations' :
+                          userData.role.id === 15 ? 'backoffice_admin_staff' :
+                          userData.role.id === 10 ? 'sales' : 'user',
+                    role_id: userData.role.id,
+                    company_name: userData.legacy?.company_name,
+                    bin_iin: userData.legacy?.bin_iin,
                     is_verified: userData.is_verified,
-                    verified_at: userData.verified_at,
-                    telegram_chat_id: userData.telegram_chat_id,
-                    notify_tasks_telegram: userData.notify_tasks_telegram,
+                    verified_at: undefined,
+                    telegram_chat_id: userData.telegram?.chat_id,
+                    notify_tasks_telegram: userData.telegram?.notify_tasks,
                     status: 'active'
                 };
                 
@@ -473,6 +482,47 @@ export default function DocumentsPage() {
 
     const currentPage = Number(searchParams.get("page")) || 1
     const size = 50
+
+    // Initialize filter states from URL
+    useEffect(() => {
+        setStatusFilter(searchParams.get('status') || '');
+        setDocTypeFilter(searchParams.get('doc_type') || '');
+        setDealIdFilter(searchParams.get('deal_id') || '');
+        setClientIdFilter(searchParams.get('client_id') || '');
+        setClientTypeFilter(searchParams.get('client_type') || '');
+        setSortBy(searchParams.get('sort_by') || 'created_at');
+        setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
+    }, [searchParams]);
+
+    // Update URL when filters change
+    const updateURL = () => {
+        const params = new URLSearchParams();
+        if (currentPage > 1) params.set('page', currentPage.toString());
+        if (searchTerm) params.set('q', searchTerm);
+        if (statusFilter) params.set('status', statusFilter);
+        if (docTypeFilter) params.set('doc_type', docTypeFilter);
+        if (dealIdFilter) params.set('deal_id', dealIdFilter);
+        if (clientIdFilter) params.set('client_id', clientIdFilter);
+        if (clientTypeFilter) params.set('client_type', clientTypeFilter);
+        if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+        params.set('sort_by', sortBy);
+        params.set('order', sortOrder);
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
+    // Reset filters
+    const resetFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('');
+        setDocTypeFilter('');
+        setDealIdFilter('');
+        setClientIdFilter('');
+        setClientTypeFilter('');
+        setSortBy('created_at');
+        setSortOrder('desc');
+        setArchiveFilter('active');
+        router.push(pathname);
+    };
 
     // ─── Fetch Documents ─────────────────────────────────────────
 
@@ -567,22 +617,18 @@ export default function DocumentsPage() {
                 // Non-sales users can use the general endpoint
                 const params: any = { page: currentPage, size: size }
                 if (searchTerm) params.q = searchTerm
+                if (statusFilter) params.status = statusFilter
+                if (docTypeFilter) params.doc_type = docTypeFilter
                 if (dealIdFilter) params.deal_id = dealIdFilter
+                if (clientIdFilter) params.client_id = clientIdFilter
+                if (clientTypeFilter) params.client_type = clientTypeFilter
                 if (archiveFilter !== "active") params.archive = archiveFilter
+                params.sort_by = sortBy
+                params.order = sortOrder
 
                 const res = await getDocuments(params)
                 let data = Array.isArray(res) ? res : (res as any)?.data || []
                 let total = (res as any)?.total || data.length
-
-                // Client-side filtering as fallback if backend doesn't support search
-                if (searchTerm) {
-                    const term = searchTerm.toLowerCase()
-                    data = data.filter((doc: any) =>
-                        doc.doc_type?.toLowerCase().includes(term) ||
-                        doc.id?.toString().includes(term)
-                    )
-                    total = data.length
-                }
 
                 setDocuments(data)
                 setTotalDocuments(total)
@@ -755,7 +801,12 @@ export default function DocumentsPage() {
         if (user) {
             fetchDocuments()
         }
-    }, [currentPage, searchTerm, dealIdFilter, archiveFilter, user])
+    }, [currentPage, statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder, user])
+
+    // Update URL when filters change
+    useEffect(() => {
+        updateURL();
+    }, [statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -764,7 +815,7 @@ export default function DocumentsPage() {
             }
         }, 300)
         return () => clearTimeout(timer)
-    }, [currentPage, searchTerm, archiveFilter, user])
+    }, [searchTerm, user])
 
     // ─── Load clients for create dialog ────────────────────────────
 
@@ -802,16 +853,14 @@ export default function DocumentsPage() {
             
             const params = { 
                 client_id: Number(clientId), 
-                client_type: clientType
+                client_type: clientType,
+                status_group: 'active'
             };
             
             const res = await fetchFn(undefined, params);
             const data = Array.isArray(res) ? res : (res as any)?.data || [];
             
-            // Filter out archived deals on frontend
-            const nonArchivedDeals = data.filter((d: any) => !d.is_archived);
-            
-            setFilteredDeals(nonArchivedDeals);
+            setFilteredDeals(data);
         } catch (err: any) {
             console.error("Error loading deals for client:", err);
             setFilteredDeals([]);
@@ -1067,6 +1116,116 @@ export default function DocumentsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Filters */}
+            <Card className="mx-6 mb-6 overflow-visible">
+                <CardContent className="p-4 overflow-visible">
+                    <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                        <div className="flex-1">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="Поиск по типу документа, имени файла, сделке, клиенту..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <CustomSelect
+                                value={statusFilter}
+                                onChange={setStatusFilter}
+                                placeholder="Статус"
+                                className="w-full"
+                                options={[
+                                    { value: "", label: "Все статусы" },
+                                    { value: "draft", label: "Черновик" },
+                                    { value: "under_review", label: "На проверке" },
+                                    { value: "approved", label: "Утвержден" },
+                                    { value: "returned", label: "Возвращён" },
+                                    { value: "signed", label: "Подписан" },
+                                ]}
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <CustomSelect
+                                value={docTypeFilter}
+                                onChange={setDocTypeFilter}
+                                placeholder="Тип документа"
+                                className="w-full"
+                                options={[
+                                    { value: "", label: "Все типы" },
+                                    ...creatableDocTypes
+                                ]}
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <Input
+                                placeholder="ID сделки"
+                                value={dealIdFilter}
+                                onChange={(e) => setDealIdFilter(e.target.value)}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <Input
+                                placeholder="ID клиента"
+                                value={clientIdFilter}
+                                onChange={(e) => setClientIdFilter(e.target.value)}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <CustomSelect
+                                value={clientTypeFilter}
+                                onChange={setClientTypeFilter}
+                                placeholder="Тип клиента"
+                                className="w-full"
+                                options={[
+                                    { value: "", label: "Все типы" },
+                                    { value: "individual", label: "Физическое лицо" },
+                                    { value: "legal", label: "Юридическое лицо" },
+                                ]}
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <ArchiveFilter
+                                value={archiveFilter}
+                                onChange={setArchiveFilter}
+                            />
+                        </div>
+                        <div className="w-full sm:w-48 overflow-visible">
+                            <div className="flex gap-2">
+                                <CustomSelect
+                                    value={sortBy}
+                                    onChange={setSortBy}
+                                    placeholder="Сортировка"
+                                    options={[
+                                        { value: "created_at", label: "Дата создания" },
+                                        { value: "status", label: "Статус" },
+                                        { value: "doc_type", label: "Тип документа" },
+                                        { value: "name", label: "Имя" },
+                                    ]}
+                                    className="flex-1"
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                                >
+                                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="w-full sm:w-auto">
+                            <Button variant="outline" onClick={resetFilters}>
+                                Сбросить
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Deal Filter for Sales Users */}
             {(currentUser?.role === 'sales' || currentUser?.role_id === 10) && (
@@ -1408,7 +1567,7 @@ export default function DocumentsPage() {
                                 disabled={!createForm.client_id || loadingDeals}
                             />
                             {createForm.client_id && !loadingDeals && filteredDeals.length === 0 && (
-                                <p className="text-xs text-orange-500">У клиента нет сделок</p>
+                                <p className="text-xs text-orange-500">У клиента нет подходящих сделок</p>
                             )}
                             {!createForm.deal_id && createForm.client_id && filteredDeals.length > 0 && (
                                 <p className="text-xs text-red-500">Выберите сделку</p>

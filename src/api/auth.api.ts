@@ -7,18 +7,18 @@ import type * as Models from '../models/Auth.model'
 function transformUserFromServer(serverUser: any): any {
   return {
     id: serverUser.id,
-    firstName: serverUser.company_name || serverUser.email.split('@')[0],
+    firstName: serverUser.legacy?.company_name || serverUser.full_name || serverUser.email.split('@')[0],
     lastName: '',
     email: serverUser.email,
     phone: serverUser.phone,
-    role: getRoleFromId(serverUser.role_id), // Преобразуем role_id в строковую роль
-    company_name: serverUser.company_name,
-    bin_iin: serverUser.bin_iin,
-    role_id: serverUser.role_id,
+    role: normalizeRoleCode(serverUser.role?.code) || getRoleFromId(serverUser.role?.id), // Преобразуем role в строковую роль
+    company_name: serverUser.legacy?.company_name,
+    bin_iin: serverUser.legacy?.bin_iin,
+    role_id: serverUser.role?.id,
     is_verified: serverUser.is_verified,
-    verified_at: serverUser.verified_at,
-    telegram_chat_id: serverUser.telegram_chat_id,
-    notify_tasks_telegram: serverUser.notify_tasks_telegram,
+    verified_at: undefined,
+    telegram_chat_id: serverUser.telegram?.chat_id,
+    notify_tasks_telegram: serverUser.telegram?.notify_tasks,
     status: 'active'
   }
 }
@@ -36,6 +36,20 @@ function getRoleFromId(roleId: number): string {
     // Добавьте другие role_id по мере необходимости
   }
   return roleMapping[roleId] || 'user'
+}
+
+// Функция для нормализации role codes
+function normalizeRoleCode(roleCode: string): string {
+  const codeMapping: Record<string, string> = {
+    'system_admin': 'system_admin',
+    'leadership': 'leadership',
+    'management': 'leadership',
+    'control': 'control',
+    'operations': 'operations',
+    'backoffice_admin_staff': 'backoffice_admin_staff',
+    'sales': 'sales',
+  }
+  return codeMapping[roleCode] || roleCode
 }
 
 export async function login(payload: Models.Auth_Login_Request, params?: Record<string, any>): Promise<Models.Auth_Login_Response> {
@@ -66,8 +80,8 @@ export async function login(payload: Models.Auth_Login_Request, params?: Record<
       // Также создаем компанию на основе данных пользователя
       const company = {
         id: String(data.user.id),
-        name: data.user.company_name,
-        bin_iin: data.user.bin_iin,
+        name: data.user.legacy?.company_name || data.user.full_name,
+        bin_iin: data.user.legacy?.bin_iin,
         email: data.user.email,
         phone: data.user.phone,
         status: 'active'

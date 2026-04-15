@@ -6,15 +6,30 @@ export type Auth_Login_Response = {
   }
   user: {
     id: number
-    company_name: string
-    bin_iin: string
+    full_name: string
     email: string
-    role_id: number
     phone: string
-    is_verified: boolean
-    verified_at: string
-    telegram_chat_id: number
-    notify_tasks_telegram: boolean
+    is_active: boolean
+    is_verified: true
+    branch: {
+      id: number
+      code: string
+      name: string
+      is_active: boolean
+    }
+    legacy: {
+      company_name: string
+      bin_iin: string
+    }
+    role: {
+      id: number
+      code: string
+      legacy_name: string
+    }
+    telegram: {
+      chat_id: number
+      notify_tasks: boolean
+    }
   }
 }
 
