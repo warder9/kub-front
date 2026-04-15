@@ -162,11 +162,6 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:read',
       'documents:write',
     ],
-    backoffice_admin_staff: [
-      // Административный персонал: CanAccessMessengerOnly, CanAccessTasks
-      'tasks:read',
-      'tasks:write',
-    ],
     sales: [
       // Отдел продаж: CanWorkWithLeads
       'leads:read',
@@ -204,7 +199,6 @@ export function getUserRoleText(role: string | undefined): string {
     leadership: 'Руководство',
     control: 'Отдел контроля',
     operations: 'Операционный отдел',
-    backoffice_admin_staff: 'Административный персонал',
     sales: 'Отдел продаж',
   };
   
@@ -227,15 +221,24 @@ export function isAuthenticated(): boolean {
 }
 
 // Functions for testing roles (dev only)
-export function switchTestRole(role: User['role']): void {
+export function switchTestRole(roleCode: string): void {
   const currentUser = getCurrentUser();
   if (currentUser && typeof window !== 'undefined') {
     // Store original role if not already stored
     if (!localStorage.getItem('original_user_role')) {
-      localStorage.setItem('original_user_role', currentUser.role ?? '');
+      localStorage.setItem('original_user_role', JSON.stringify(currentUser.role));
     }
     
-    const updatedUser = { ...currentUser, role };
+    // Map role code to role object
+    const roleMapping: Record<string, { id: number; code: string; legacy_name: string }> = {
+      'system_admin': { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' },
+      'leadership': { id: 40, code: 'leadership', legacy_name: 'Руководство' },
+      'control': { id: 30, code: 'control', legacy_name: 'Отдел контроля' },
+      'operations': { id: 20, code: 'operations', legacy_name: 'Операционный отдел' },
+      'sales': { id: 10, code: 'sales', legacy_name: 'Отдел продаж' },
+    };
+    
+    const updatedUser = { ...currentUser, role: roleMapping[roleCode] || currentUser.role, role_id: roleMapping[roleCode]?.id };
     setCurrentUser(updatedUser);
     window.location.reload();
   }
@@ -243,17 +246,22 @@ export function switchTestRole(role: User['role']): void {
 
 export function resetTestRole(): void {
   if (typeof window !== 'undefined') {
-    const originalRole = localStorage.getItem('original_user_role');
+    const originalRoleStr = localStorage.getItem('original_user_role');
     const currentUser = getCurrentUser();
     
-    if (currentUser && originalRole) {
-      const updatedUser = { ...currentUser, role: originalRole as User['role'] };
-      setCurrentUser(updatedUser);
-      localStorage.removeItem('original_user_role');
-      window.location.reload();
+    if (currentUser && originalRoleStr) {
+      try {
+        const originalRole = JSON.parse(originalRoleStr);
+        const updatedUser = { ...currentUser, role: originalRole, role_id: originalRole.id };
+        setCurrentUser(updatedUser);
+        localStorage.removeItem('original_user_role');
+        window.location.reload();
+      } catch (e) {
+        console.error('Failed to parse original role:', e);
+      }
     } else if (currentUser) {
-      // Fallback if original role not found, reset to admin or a default
-      const updatedUser = { ...currentUser, role: 'admin' as User['role'] };
+      // Fallback if original role not found, reset to system_admin
+      const updatedUser = { ...currentUser, role: { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' }, role_id: 50 };
       setCurrentUser(updatedUser);
       window.location.reload();
     }

@@ -344,7 +344,7 @@ function ComboboxSelect({
 // ─── Role helper ─────────────────────────────────────────────────
 
 function getRoleKey(roleId?: number): string {
-    const map: Record<number, string> = { 50: "system_admin", 40: "leadership", 30: "control", 20: "operations", 15: "backoffice_admin_staff", 10: "sales" }
+    const map: Record<number, string> = { 50: "system_admin", 40: "leadership", 30: "control", 20: "operations", 10: "sales" }
     return map[roleId || 0] || "user"
 }
 
@@ -391,21 +391,24 @@ export default function DocumentsPage() {
                 // Transform API response to match User interface
                 const transformedUser = {
                     id: String(userData.id),
-                    firstName: userData.legacy?.company_name || userData.full_name || userData.email?.split('@')[0] || '',
-                    lastName: '',
+                    full_name: userData.full_name,
                     email: userData.email,
                     phone: userData.phone,
-                    role: userData.role.id === 50 ? 'system_admin' :
-                          userData.role.id === 40 ? 'leadership' :
-                          userData.role.id === 30 ? 'control' :
-                          userData.role.id === 20 ? 'operations' :
-                          userData.role.id === 15 ? 'backoffice_admin_staff' :
-                          userData.role.id === 10 ? 'sales' : 'user',
-                    role_id: userData.role.id,
+                    role: userData.role || { id: 0, code: '', legacy_name: '' },
+                    branch: userData.branch || null,
+                    is_active: userData.is_active,
+                    is_verified: userData.is_verified,
+                    telegram: userData.telegram || { chat_id: 0, notify_tasks: false },
+                    legacy: userData.legacy || { company_name: '', bin_iin: '' },
+                    // Optional fields that may not exist in current backend response
+                    first_name: (userData as any).first_name,
+                    last_name: (userData as any).last_name,
+                    middle_name: (userData as any).middle_name,
+                    position: (userData as any).position,
+                    // Legacy fields for backward compatibility
+                    role_id: userData.role?.id,
                     company_name: userData.legacy?.company_name,
                     bin_iin: userData.legacy?.bin_iin,
-                    is_verified: userData.is_verified,
-                    verified_at: undefined,
                     telegram_chat_id: userData.telegram?.chat_id,
                     notify_tasks_telegram: userData.telegram?.notify_tasks,
                     status: 'active'
@@ -1120,115 +1123,121 @@ export default function DocumentsPage() {
             {/* Filters */}
             <Card className="mx-6 mb-6 overflow-visible">
                 <CardContent className="p-4 overflow-visible">
-                    <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
-                        <div className="flex-1">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                <Input
-                                    placeholder="Поиск по типу документа, имени файла, сделке, клиенту..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10"
+                    <div className="space-y-4 overflow-visible">
+                        {/* First row: Primary filters */}
+                        <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                            <div className="flex-1">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        placeholder="Поиск по типу документа, имени файла, сделке, клиенту..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10"
+                                    />
+                                </div>
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <CustomSelect
+                                    value={statusFilter}
+                                    onChange={setStatusFilter}
+                                    placeholder="Статус"
+                                    className="w-full"
+                                    options={[
+                                        { value: "", label: "Все статусы" },
+                                        { value: "draft", label: "Черновик" },
+                                        { value: "under_review", label: "На проверке" },
+                                        { value: "approved", label: "Утвержден" },
+                                        { value: "returned", label: "Возвращён" },
+                                        { value: "signed", label: "Подписан" },
+                                    ]}
+                                />
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <CustomSelect
+                                    value={docTypeFilter}
+                                    onChange={setDocTypeFilter}
+                                    placeholder="Тип документа"
+                                    className="w-full"
+                                    options={[
+                                        { value: "", label: "Все типы" },
+                                        ...creatableDocTypes
+                                    ]}
+                                />
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <ArchiveFilter
+                                    value={archiveFilter}
+                                    onChange={setArchiveFilter}
                                 />
                             </div>
                         </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <CustomSelect
-                                value={statusFilter}
-                                onChange={setStatusFilter}
-                                placeholder="Статус"
-                                className="w-full"
-                                options={[
-                                    { value: "", label: "Все статусы" },
-                                    { value: "draft", label: "Черновик" },
-                                    { value: "under_review", label: "На проверке" },
-                                    { value: "approved", label: "Утвержден" },
-                                    { value: "returned", label: "Возвращён" },
-                                    { value: "signed", label: "Подписан" },
-                                ]}
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <CustomSelect
-                                value={docTypeFilter}
-                                onChange={setDocTypeFilter}
-                                placeholder="Тип документа"
-                                className="w-full"
-                                options={[
-                                    { value: "", label: "Все типы" },
-                                    ...creatableDocTypes
-                                ]}
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <Input
-                                placeholder="ID сделки"
-                                value={dealIdFilter}
-                                onChange={(e) => setDealIdFilter(e.target.value)}
-                                className="w-full"
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <Input
-                                placeholder="ID клиента"
-                                value={clientIdFilter}
-                                onChange={(e) => setClientIdFilter(e.target.value)}
-                                className="w-full"
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <CustomSelect
-                                value={clientTypeFilter}
-                                onChange={setClientTypeFilter}
-                                placeholder="Тип клиента"
-                                className="w-full"
-                                options={[
-                                    { value: "", label: "Все типы" },
-                                    { value: "individual", label: "Физическое лицо" },
-                                    { value: "legal", label: "Юридическое лицо" },
-                                ]}
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <ArchiveFilter
-                                value={archiveFilter}
-                                onChange={setArchiveFilter}
-                            />
-                        </div>
-                        <div className="w-full sm:w-48 overflow-visible">
-                            <div className="flex gap-2">
-                                <CustomSelect
-                                    value={sortBy}
-                                    onChange={setSortBy}
-                                    placeholder="Сортировка"
-                                    options={[
-                                        { value: "created_at", label: "Дата создания" },
-                                        { value: "status", label: "Статус" },
-                                        { value: "doc_type", label: "Тип документа" },
-                                        { value: "name", label: "Имя" },
-                                    ]}
-                                    className="flex-1"
+                        {/* Second row: Secondary filters */}
+                        <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <Input
+                                    placeholder="ID сделки"
+                                    value={dealIdFilter}
+                                    onChange={(e) => setDealIdFilter(e.target.value)}
+                                    className="w-full"
                                 />
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                                >
-                                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <Input
+                                    placeholder="ID клиента"
+                                    value={clientIdFilter}
+                                    onChange={(e) => setClientIdFilter(e.target.value)}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <CustomSelect
+                                    value={clientTypeFilter}
+                                    onChange={setClientTypeFilter}
+                                    placeholder="Тип клиента"
+                                    className="w-full"
+                                    options={[
+                                        { value: "", label: "Все типы" },
+                                        { value: "individual", label: "Физическое лицо" },
+                                        { value: "legal", label: "Юридическое лицо" },
+                                    ]}
+                                />
+                            </div>
+                            <div className="w-full sm:w-48 overflow-visible">
+                                <div className="flex gap-2">
+                                    <CustomSelect
+                                        value={sortBy}
+                                        onChange={setSortBy}
+                                        placeholder="Сортировка"
+                                        options={[
+                                            { value: "created_at", label: "Дата создания" },
+                                            { value: "status", label: "Статус" },
+                                            { value: "doc_type", label: "Тип документа" },
+                                            { value: "name", label: "Имя" },
+                                        ]}
+                                        className="flex-1"
+                                    />
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                                    >
+                                        {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="w-full sm:w-auto">
+                                <Button variant="outline" onClick={resetFilters}>
+                                    Сбросить
                                 </Button>
                             </div>
-                        </div>
-                        <div className="w-full sm:w-auto">
-                            <Button variant="outline" onClick={resetFilters}>
-                                Сбросить
-                            </Button>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
             {/* Deal Filter for Sales Users */}
-            {(currentUser?.role === 'sales' || currentUser?.role_id === 10) && (
+            {(currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) && (
                 <div className="mx-6 mb-6">
                     <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-sm">

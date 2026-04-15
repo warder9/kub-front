@@ -157,7 +157,6 @@ export default function DealsPage() {
       40: 'leadership',
       30: 'control',
       20: 'operations',
-      15: 'backoffice_admin_staff',
       10: 'sales'
     }
     return roleMapping[roleId] || 'user'
@@ -424,13 +423,12 @@ export default function DealsPage() {
             // Create minimal user data from company data
             const tempUser = {
               id: companyData.id.toString(),
-              firstName: companyData.name,
-              lastName: "",
+              full_name: companyData.name,
               email: companyData.email || '',
               phone: companyData.phone || '',
-              role: "sales", // Default to sales for safety
+              role: { id: 10, code: 'sales', legacy_name: 'Отдел продаж' },
               company_name: companyData.name,
-              role_id: 10, // Consistent with sales role
+              role_id: 10,
               is_verified: true,
               status: 'active'
             };
@@ -452,7 +450,7 @@ export default function DealsPage() {
         try {
           // Apply same safety fix: default to listMyClients for sales users or undefined roles
           const userRole = userData?.role;
-          const isSalesRole = !userRole || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales';
+          const isSalesRole = !userRole || userRole?.code === 'sales' || userData?.role_id === 10;
           
           console.log('Loading clients for user:', { userRole, isSalesRole });
           
@@ -502,7 +500,7 @@ export default function DealsPage() {
           
           // Use list_my_leads for non-system_admin/leadership users, with fallback for 403 errors
           let leadsRes;
-          if (currentUser?.role === 'system_admin' || currentUser?.role === 'leadership') {
+          if (currentUser?.role?.code === 'system_admin' || currentUser?.role?.code === 'leadership' || currentUser?.role_id === 50 || currentUser?.role_id === 40) {
             try {
               console.log('Attempting to use list_leads for system_admin/leadership user');
               leadsRes = await list_leads();
@@ -535,7 +533,7 @@ export default function DealsPage() {
         }
 
         // Load users (for responsible) - only for system_admin/leadership
-        if (userData && (userData.role === "system_admin" || userData.role === "leadership")) {
+        if (userData && (userData.role?.code === "system_admin" || userData.role?.code === "leadership" || userData.role_id === 50 || userData.role_id === 40)) {
           try {
             const { listUsers } = await import("@/src/api/users.api");
             const res = await listUsers();
@@ -554,9 +552,9 @@ export default function DealsPage() {
             // Fallback: at least include the current user
             if (userData) {
               const currentUserForDropdown = {
-                id: parseInt(userData.id) || userData.id,
-                firstName: userData.firstName || userData.company_name || '',
-                lastName: userData.lastName || '',
+                id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
+                firstName: userData.full_name || userData.company_name || '',
+                lastName: '',
                 email: userData.email,
                 role: userData.role
               };
@@ -568,9 +566,9 @@ export default function DealsPage() {
           // For non-system_admin/leadership users, only include current user in dropdown
           if (userData) {
             const currentUserForDropdown = {
-              id: parseInt(userData.id) || userData.id,
-              firstName: userData.firstName || userData.company_name || '',
-              lastName: userData.lastName || '',
+              id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
+              firstName: userData.full_name || userData.company_name || '',
+              lastName: '',
               email: userData.email,
               role: userData.role
             };
@@ -585,7 +583,7 @@ export default function DealsPage() {
     };
 
     loadMeta();
-  }, [router, user?.role]);
+  }, [router]);
 
   // Fetch deals on params change
   useEffect(() => {
@@ -648,7 +646,7 @@ export default function DealsPage() {
       
       // Use list_my_leads for non-system_admin/leadership users to avoid 403 errors
       let leadsRes;
-      if (currentUser?.role === 'system_admin' || currentUser?.role === 'leadership') {
+      if (currentUser?.role?.code === 'system_admin' || currentUser?.role?.code === 'leadership' || currentUser?.role_id === 50 || currentUser?.role_id === 40) {
         console.log('MANUAL REFRESH: Using list_leads for system_admin/leadership user');
         leadsRes = await list_leads();
       } else {
@@ -957,7 +955,7 @@ export default function DealsPage() {
     try {
       const userData = getCurrentUser();
       if (userData) {
-        const res = userData.role === "system_admin" || userData.role === "leadership"
+        const res = userData.role?.code === "system_admin" || userData.role?.code === "leadership" || userData.role_id === 50 || userData.role_id === 40
           ? await ClientAPI.listClients()
           : await ClientAPI.listMyClients();
         const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];

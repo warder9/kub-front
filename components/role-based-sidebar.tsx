@@ -97,6 +97,12 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       icon: Shield,
       permissions: ["users:write"],
     },
+    {
+      title: "Филиалы",
+      href: "/branches",
+      icon: Building2,
+      permissions: ["settings:write"],
+    },
   ],
   leadership: [
     {
@@ -242,26 +248,6 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       permissions: [],
     },
   ],
-  backoffice_admin_staff: [
-    {
-      title: "Задачи",
-      href: "/tasks",
-      icon: Calendar,
-      permissions: ["tasks:read"],
-    },
-    {
-      title: "Чат",
-      href: "/chat",
-      icon: MessageSquare,
-      permissions: [],
-    },
-    {
-      title: "Wazzup",
-      href: "/whatsapp",
-      icon: MessageCircle,
-      permissions: [],
-    },
-  ],
   sales: [
     {
       title: "Лиды",
@@ -314,7 +300,6 @@ function getRoleFromId(roleId: number): string {
     40: 'leadership',
     30: 'control',
     20: 'operations',
-    15: 'backoffice_admin_staff',
     10: 'sales',
   }
   return roleMapping[roleId] || 'user'
@@ -328,7 +313,6 @@ function normalizeRoleCode(roleCode: string): string {
     'management': 'leadership', // legacy_name mapping
     'control': 'control',
     'operations': 'operations',
-    'backoffice_admin_staff': 'backoffice_admin_staff',
     'sales': 'sales',
   }
   return codeMapping[roleCode] || roleCode
@@ -340,7 +324,6 @@ function getRoleDisplayName(roleKey: string): string {
     'leadership': 'Руководство',
     'operations': 'Операционный отдел',
     'control': 'Отдел контроля',
-    'backoffice_admin_staff': 'Административный персонал',
     'sales': 'Отдел продаж',
     'user': 'Пользователь'
   }

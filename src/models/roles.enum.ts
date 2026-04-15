@@ -1,6 +1,5 @@
 export enum Roles {
   SALES = 10,
-  BACKOFFICE_STAFF = 15,
   OPERATIONS = 20,
   CONTROL = 30,
   MANAGEMENT = 40,
@@ -17,8 +16,6 @@ export const getRoleName = (roleId: number) => {
       return "Отдел контроля";
     case Roles.OPERATIONS:
       return "Операционный отдел";
-    case Roles.BACKOFFICE_STAFF:
-      return "Административный персонал";
     case Roles.SALES:
       return "Отдел продаж";
     default:

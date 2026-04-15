@@ -121,7 +121,6 @@ function getRoleFromId(roleId: number): string {
     40: 'leadership',
     30: 'control',
     20: 'operations',
-    15: 'backoffice_admin_staff',
     10: 'sales'
   }
   return roleMapping[roleId] || 'user'
@@ -389,7 +388,7 @@ export default function TasksPage() {
 
       // Prevent sales users from accessing full tasks list
       // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
-      const effectiveView = currentUser?.role === 'sales' ? 'all' : 'all';
+      const effectiveView = currentUser?.role?.code === 'sales' ? 'all' : 'all';
 
       console.log('fetchTasks called:', {
         userRole: currentUser?.role,
@@ -657,13 +656,12 @@ export default function TasksPage() {
             // Create minimal user data from company data with correct role
             const tempUser = {
               id: String(companyData.id),
-              firstName: companyData.name,
-              lastName: "",
+              full_name: companyData.name,
               email: companyData.email || '',
               phone: companyData.phone || '',
-              role: userRole, // Use actual role instead of hardcoded "admin"
+              role: { id: roleId || 50, code: userRole || 'system_admin', legacy_name: userRole === 'system_admin' ? 'Системный администратор' : 'Пользователь' },
               company_name: companyData.name,
-              role_id: roleId, // Use actual role_id
+              role_id: roleId || 50,
               is_verified: true,
               status: 'active'
             };
@@ -719,7 +717,7 @@ export default function TasksPage() {
         try {
           console.log('Loading deals for user role:', userData?.role);
           const { list_deals, list_my_deals } = await import("@/src/api/deals.api")
-          const res = userData?.role === 'sales' 
+          const res = userData?.role?.code === 'sales' 
             ? await list_my_deals() 
             : await list_deals();
           console.log('Deals API response:', res);
@@ -735,7 +733,7 @@ export default function TasksPage() {
         try {
           console.log('Loading leads for user role:', userData?.role);
           const { list_leads, list_my_leads } = await import("@/src/api/leads.api")
-          const res = userData?.role === 'sales' 
+          const res = userData?.role?.code === 'sales' 
             ? await list_my_leads() 
             : await list_leads();
           console.log('Leads API response:', res);

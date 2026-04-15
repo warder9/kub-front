@@ -424,7 +424,7 @@ export default function ClientsPage() {
   const [clientView, setClientView] = useState<"all" | "my">(() => {
     // Initialize with correct view based on user role
     const currentUser = getCurrentUser();
-    return (currentUser?.role === 'sales' || currentUser?.role_id === 10) ? 'my' : 'all';
+    return (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) ? 'my' : 'all';
   });
   
   // State for fresh user data from API
@@ -458,21 +458,24 @@ export default function ClientsPage() {
         // Transform API response to match User interface
         const transformedUser = {
           id: String(userData.id),
-          firstName: userData.legacy?.company_name || userData.full_name || userData.email?.split('@')[0] || '',
-          lastName: '',
+          full_name: userData.full_name,
           email: userData.email,
           phone: userData.phone,
-          role: userData.role.id === 50 ? 'system_admin' :
-                userData.role.id === 40 ? 'leadership' :
-                userData.role.id === 30 ? 'control' :
-                userData.role.id === 20 ? 'operations' :
-                userData.role.id === 15 ? 'backoffice_admin_staff' :
-                userData.role.id === 10 ? 'sales' : 'user',
-          role_id: userData.role.id,
+          role: userData.role || { id: 0, code: '', legacy_name: '' },
+          branch: userData.branch || null,
+          is_active: userData.is_active,
+          is_verified: userData.is_verified,
+          telegram: userData.telegram || { chat_id: 0, notify_tasks: false },
+          legacy: userData.legacy || { company_name: '', bin_iin: '' },
+          // Optional fields
+          first_name: (userData as any).first_name,
+          last_name: (userData as any).last_name,
+          middle_name: (userData as any).middle_name,
+          position: (userData as any).position,
+          // Legacy fields for backward compatibility
+          role_id: userData.role?.id,
           company_name: userData.legacy?.company_name,
           bin_iin: userData.legacy?.bin_iin,
-          is_verified: userData.is_verified,
-          verified_at: undefined,
           telegram_chat_id: userData.telegram?.chat_id,
           notify_tasks_telegram: userData.telegram?.notify_tasks,
           status: 'active'
@@ -515,10 +518,10 @@ export default function ClientsPage() {
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
-      let effectiveView = (currentUser?.role === 'sales' || currentUser?.role_id === 10) ? 'my' : clientView;
+      let effectiveView = (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) ? 'my' : clientView;
 
       // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
-      if (currentUser?.role === 'sales' || currentUser?.role_id === 10) {
+      if (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) {
         effectiveView = 'my';
         console.log('SAFEGUARD: Forced to my view for sales user');
       }
@@ -530,7 +533,7 @@ export default function ClientsPage() {
         effectiveView,
         endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
         params,
-        'currentUser?.role === "sales"': currentUser?.role === 'sales',
+        'currentUser?.role?.code === "sales"': currentUser?.role?.code === 'sales',
         'currentUser?.role_id === 10': currentUser?.role_id === 10,
         'effectiveView === "all"': effectiveView === "all",
         'calling listClients?': effectiveView === "all"
@@ -564,14 +567,14 @@ export default function ClientsPage() {
       // Use proper API based on user role
       console.log('Choosing API endpoint based on role:', {
         currentUserRole: currentUser?.role,
-        isSales: currentUser?.role === 'sales',
-        willCall: currentUser?.role === 'sales' ? 'listMyClients' : 'listClients'
+        isSales: currentUser?.role?.code === 'sales',
+        willCall: currentUser?.role?.code === 'sales' ? 'listMyClients' : 'listClients'
       });
 
       // More robust role check - handle different formats and undefined roles
       const userRole = currentUser?.role;
       const userId = currentUser?.role_id;
-      const isSalesRole = (!userRole && !userId) || userRole === 'sales' || userRole === 'Sales' || userRole?.toString().toLowerCase() === 'sales' || userId === 10;
+      const isSalesRole = (!userRole && !userId) || userRole?.code === 'sales' || userId === 10;
 
       console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
 
@@ -650,7 +653,7 @@ export default function ClientsPage() {
     }
     
     // Force correct view for sales users
-    if (user.role === 'sales' && clientView === 'all') {
+    if (user.role?.code === 'sales' && clientView === 'all') {
       console.log('Sales user with all view, switching to my view');
       setClientView('my');
       return; // Let the effect handle the fetch
@@ -671,7 +674,7 @@ export default function ClientsPage() {
     const currentUser = getCurrentUser();
     console.log('Initial user check:', currentUser);
     
-    if ((currentUser?.role === 'sales' || currentUser?.role_id === 10) && clientView === 'all') {
+    if ((currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
@@ -681,7 +684,7 @@ useEffect(() => {
     console.log('=== USEEFFECT 1: User/Role Change ===');
     console.log('User:', user);
     console.log('Client view:', clientView);
-    if ((user?.role === 'sales' || user?.role_id === 10) && clientView === 'all') {
+    if ((user?.role?.code === 'sales' || user?.role_id === 10) && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }

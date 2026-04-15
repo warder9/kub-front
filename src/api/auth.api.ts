@@ -7,16 +7,23 @@ import type * as Models from '../models/Auth.model'
 function transformUserFromServer(serverUser: any): any {
   return {
     id: serverUser.id,
-    firstName: serverUser.legacy?.company_name || serverUser.full_name || serverUser.email.split('@')[0],
-    lastName: '',
+    first_name: serverUser.first_name,
+    last_name: serverUser.last_name,
+    middle_name: serverUser.middle_name,
+    full_name: serverUser.full_name,
     email: serverUser.email,
     phone: serverUser.phone,
-    role: normalizeRoleCode(serverUser.role?.code) || getRoleFromId(serverUser.role?.id), // Преобразуем role в строковую роль
+    position: serverUser.position,
+    role: serverUser.role || { id: 0, code: '', legacy_name: '' },
+    branch: serverUser.branch || null,
+    is_active: serverUser.is_active,
+    is_verified: serverUser.is_verified,
+    telegram: serverUser.telegram || { chat_id: 0, notify_tasks: false },
+    legacy: serverUser.legacy || { company_name: '', bin_iin: '' },
+    // Legacy fields for backward compatibility
+    role_id: serverUser.role?.id,
     company_name: serverUser.legacy?.company_name,
     bin_iin: serverUser.legacy?.bin_iin,
-    role_id: serverUser.role?.id,
-    is_verified: serverUser.is_verified,
-    verified_at: undefined,
     telegram_chat_id: serverUser.telegram?.chat_id,
     notify_tasks_telegram: serverUser.telegram?.notify_tasks,
     status: 'active'
@@ -30,10 +37,7 @@ function getRoleFromId(roleId: number): string {
     40: 'leadership',
     30: 'control',
     20: 'operations',
-    15: 'backoffice_admin_staff',
     10: 'sales',
-    5: 'user'
-    // Добавьте другие role_id по мере необходимости
   }
   return roleMapping[roleId] || 'user'
 }
@@ -46,7 +50,6 @@ function normalizeRoleCode(roleCode: string): string {
     'management': 'leadership',
     'control': 'control',
     'operations': 'operations',
-    'backoffice_admin_staff': 'backoffice_admin_staff',
     'sales': 'sales',
   }
   return codeMapping[roleCode] || roleCode
