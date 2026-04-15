@@ -820,6 +820,34 @@ export default function DocumentsPage() {
         return () => clearTimeout(timer)
     }, [searchTerm, user])
 
+    // ─── Load deals and clients for table display ───────────────────
+
+    useEffect(() => {
+        const loadDealsAndClients = async () => {
+            if (!user) return;
+
+            try {
+                const userRole = getRoleKey(user.role_id);
+                
+                // Load deals
+                const dealsFetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
+                const dealsRes = await dealsFetchFn(undefined, { page: 1, size: 1000 });
+                const dealsData = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || [];
+                setDeals(dealsData);
+
+                // Load clients
+                const clientsFetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
+                const clientsRes = await clientsFetchFn({ page: 1, size: 1000 });
+                const clientsData = Array.isArray(clientsRes) ? clientsRes : (clientsRes as any)?.data || [];
+                setClients(clientsData);
+            } catch (err: any) {
+                console.error("Error loading deals and clients:", err);
+            }
+        };
+
+        loadDealsAndClients();
+    }, [user]);
+
     // ─── Load clients for create dialog ────────────────────────────
 
     useEffect(() => {
@@ -1371,10 +1399,13 @@ export default function DocumentsPage() {
                                                 <TableCell>{docTypeLabels[doc.doc_type] || doc.doc_type}</TableCell>
                                                 <TableCell className="text-sm">
                                                     {(() => {
-                                                        if (!doc.deal_id) {
-                                                            return "—";
+                                                        if (doc.client_id) {
+                                                            return getClientLabel(doc.client_id);
                                                         }
-                                                        return getClientFromDeal(doc.deal_id);
+                                                        if (doc.deal_id) {
+                                                            return getClientFromDeal(doc.deal_id);
+                                                        }
+                                                        return "—";
                                                     })()}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
