@@ -1588,8 +1588,39 @@ useEffect(() => {
               {/* Individual Client Fields */}
               {clientFormData.client_type === "individual" && (
                 <>
-                  {/* Country and Trip Purpose - FIRST */}
+                  {/* Photo Section */}
                   <div className="space-y-4">
+                    <h3 className="font-semibold text-lg">ФОТО</h3>
+                    <Separator />
+                    <div className="space-y-2">
+                      <Label htmlFor="photo_35x45">Фото клиента (35x45)</Label>
+                      <Input
+                        id="photo_35x45"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setSelectedPhotoFile(file);
+                            const preview = URL.createObjectURL(file);
+                            setPhotoPreview(preview);
+                          }
+                        }}
+                      />
+                      {(photoPreview || (editingClient && clientFormData.photo_35x45)) && (
+                        <div className="mt-2">
+                          <img
+                            src={photoPreview || clientFormData.photo_35x45 || ""}
+                            alt="Preview"
+                            className="max-w-xs rounded-lg border"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Country and Trip Purpose - FIRST */}
+                  <div className="space-y-4 border-t pt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="country">Страна *</Label>
@@ -1676,6 +1707,10 @@ useEffect(() => {
                         <Input id="middle_name" placeholder="Отчество" value={clientFormData.middle_name || ""} onChange={handleFormChange} />
                       </div>
                       <div className="space-y-2">
+                        <Label htmlFor="iin">ИИН</Label>
+                        <Input id="iin" placeholder="ИИН" value={clientFormData.iin || ""} onChange={handleFormChange} />
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="previous_last_name">Прежняя фамилия</Label>
                         <Input id="previous_last_name" placeholder="Прежняя фамилия" value={clientFormData.previous_last_name || ""} onChange={handleFormChange} />
                       </div>
@@ -1711,10 +1746,6 @@ useEffect(() => {
                     <h3 className="font-semibold text-lg">ДОКУМЕНТЫ</h3>
                     <Separator />
                     <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="iin">ИИН</Label>
-                        <Input id="iin" placeholder="ИИН" value={clientFormData.iin || ""} onChange={handleFormChange} />
-                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="id_number">Номер удостоверения личности</Label>
@@ -1747,11 +1778,36 @@ useEffect(() => {
                           <Input id="passport_expire_date" type="date" value={clientFormData.passport_expire_date || ""} onChange={handleFormChange} />
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="driver_license_categories">Категории водительских прав</Label>
+                          <CustomSelect
+                            value={clientFormData.driver_license_categories || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, driver_license_categories: value }))}
+                            options={[
+                              { value: "A", label: "A" },
+                              { value: "B", label: "B" },
+                              { value: "C", label: "C" },
+                              { value: "D", label: "D" },
+                              { value: "E", label: "E" },
+                              { value: "M", label: "M" },
+                              { value: "A1", label: "A1" },
+                              { value: "B1", label: "B1" },
+                              { value: "C1", label: "C1" },
+                              { value: "D1", label: "D1" },
+                              { value: "E1", label: "E1" },
+                              { value: "Tm", label: "Tm" },
+                              { value: "Tb", label: "Tb" }
+                            ]}
+                            placeholder="Выберите категории..."
+                          />
+                        </div>
                         <div className="space-y-2">
                           <Label htmlFor="driver_license_number">Серия и номер водительского удостоверения</Label>
                           <Input id="driver_license_number" placeholder="Серия и номер" value={clientFormData.driver_license_number || ""} onChange={handleFormChange} />
                         </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="driver_license_issue_date">Дата выдачи</Label>
                           <Input id="driver_license_issue_date" type="date" value={clientFormData.driver_license_issue_date || ""} onChange={handleFormChange} />
@@ -1808,21 +1864,15 @@ useEffect(() => {
                         <Label htmlFor="children_list">Дети</Label>
                         <Textarea id="children_list" placeholder="Информация о детях..." value={clientFormData.children_list || ""} onChange={handleFormChange} rows={2} />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Trusted Person Section */}
-                  <div className="space-y-4 border-t pt-4">
-                    <h3 className="font-semibold text-lg">ДОВЕРЕННОЕ ЛИЦО</h3>
-                    <Separator />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="trusted_person">ФИО доверенного лица</Label>
-                        <Input id="trusted_person" placeholder="ФИО" value={clientFormData.trusted_person || ""} onChange={handleFormChange} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="trusted_person_phone">Телефон доверенного лица</Label>
-                        <Input id="trusted_person_phone" placeholder="Телефон" value={clientFormData.trusted_person_phone || ""} onChange={handleFormChange} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="trusted_person">ФИО доверенного лица</Label>
+                          <Input id="trusted_person" placeholder="ФИО" value={clientFormData.trusted_person || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="trusted_person_phone">Телефон доверенного лица</Label>
+                          <Input id="trusted_person_phone" placeholder="Телефон" value={clientFormData.trusted_person_phone || ""} onChange={handleFormChange} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1953,10 +2003,6 @@ useEffect(() => {
                         <Label htmlFor="diseases_last3_years">Болезни / травмы за последние 5 лет</Label>
                         <Textarea id="diseases_last3_years" placeholder="Укажите перенесенные болезни или травмы" value={clientFormData.diseases_last3_years || ""} onChange={handleFormChange} rows={2} />
                       </div>
-                      <div>
-                        <Label htmlFor="driver_license_categories">Категории водительских прав</Label>
-                        <Input id="driver_license_categories" placeholder="Категории..." value={clientFormData.driver_license_categories || ""} onChange={handleFormChange} />
-                      </div>
                     </div>
                   </div>
                 </>
@@ -2044,8 +2090,19 @@ useEffect(() => {
                 {/* Individual Client Fields */}
                 {viewingClient.client_type === "individual" && (
                   <>
+                    {/* Photo */}
+                    {clientPhotoUrl && (
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg">ФОТО</h3>
+                        <Separator />
+                        <div className="flex justify-center">
+                          <img src={clientPhotoUrl} alt="Client photo" className="max-w-xs rounded-lg border" />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Country and Trip Purpose */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 border-t pt-4">
                       <h3 className="font-semibold text-lg">СТРАНА И ЦЕЛЬ ПОЕЗДКИ</h3>
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2062,6 +2119,7 @@ useEffect(() => {
                         <DetailItem label="Фамилия" value={viewingClient.last_name} />
                         <DetailItem label="Имя" value={viewingClient.first_name} />
                         <DetailItem label="Отчество" value={viewingClient.middle_name} />
+                        <DetailItem label="ИИН" value={viewingClient.iin} />
                         <DetailItem label="Прежняя фамилия" value={viewingClient.previous_last_name} />
                         <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
                         <DetailItem label="Пол" value={viewingClient.sex} />
@@ -2075,7 +2133,6 @@ useEffect(() => {
                       <h3 className="font-semibold text-lg">ДОКУМЕНТЫ</h3>
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="ИИН" value={viewingClient.iin} />
                         <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
                         <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
                         <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
@@ -2094,14 +2151,6 @@ useEffect(() => {
                         <DetailItem label="ФИО супруга(и)" value={viewingClient.spouse_name} />
                         <DetailItem label="Телефон супруга(и)" value={viewingClient.spouse_contacts} />
                         <DetailItem label="Дети" value={viewingClient.children_list} />
-                      </div>
-                    </div>
-
-                    {/* Trusted Person */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">ДОВЕРЕННОЕ ЛИЦО</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="ФИО доверенного лица" value={viewingClient.individual_profile?.trusted_person || viewingClient.trusted_person} />
                         <DetailItem label="Телефон доверенного лица" value={viewingClient.individual_profile?.trusted_person_phone || viewingClient.trusted_person_phone} />
                       </div>
@@ -2157,8 +2206,10 @@ useEffect(() => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Рост" value={viewingClient.individual_profile?.height?.toString() || viewingClient.height?.toString()} />
                         <DetailItem label="Вес" value={viewingClient.individual_profile?.weight?.toString() || viewingClient.weight?.toString()} />
-                        <DetailItem label="Серия и номер водительских прав" value={viewingClient.individual_profile?.driver_license_number || viewingClient.driver_license_number} />
                         <DetailItem label="Категории водительских прав" value={viewingClient.individual_profile?.driver_license_categories || viewingClient.driver_license_categories} />
+                        <DetailItem label="Серия и номер водительских прав" value={viewingClient.individual_profile?.driver_license_number || viewingClient.driver_license_number} />
+                        <DetailItem label="Дата выдачи водительских прав" value={viewingClient.driver_license_issue_date} />
+                        <DetailItem label="Дата окончания водительских прав" value={viewingClient.driver_license_expire_date} />
                         <DetailItem label="Терапевт" value={viewingClient.individual_profile?.therapist_name || viewingClient.therapist_name} />
                         <DetailItem label="Клиника" value={viewingClient.individual_profile?.clinic_name || viewingClient.clinic_name} />
                         <DetailItem label="Заболевания за 3 года" value={viewingClient.individual_profile?.diseases_last3_years || viewingClient.diseases_last3_years} />
