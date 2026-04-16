@@ -92,6 +92,7 @@ import { ru } from "date-fns/locale"
 import { toast } from "sonner"
 import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth"
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
+import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api"
 import {
   create_task,
@@ -124,6 +125,17 @@ function getRoleFromId(roleId: number): string {
     10: 'sales'
   }
   return roleMapping[roleId] || 'user'
+}
+
+// Helper function to get role code from user data
+function getRoleCode(user: any) {
+  if (!user) return undefined;
+  if (typeof user.role === 'string') return user.role;
+  if (user.role?.code) return user.role.code;
+  if (user.role_id) {
+    return getRoleFromId(user.role_id);
+  }
+  return undefined;
 }
 
 const statusTransitions: Record<TaskStatus, TaskStatus[]> = {
@@ -862,135 +874,139 @@ export default function TasksPage() {
       </div>
 
       {/* Search */}
-      <Card className="mb-6 mx-6 overflow-visible">
-        <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col gap-4 overflow-visible">
-            {/* Primary filters row */}
-            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Поиск по названию или описанию..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  placeholder="Статус"
-                  options={[
-                    { value: "all", label: "Все статусы" },
-                    { value: "new", label: "Новая" },
-                    { value: "in_progress", label: "В работе" },
-                    { value: "done", label: "Выполнена" },
-                    { value: "cancelled", label: "Отменена" },
-                  ]}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={statusGroupFilter}
-                  onChange={setStatusGroupFilter}
-                  placeholder="Группа статусов"
-                  options={[
-                    { value: "all", label: "Все группы" },
-                    { value: "active", label: "Активные" },
-                    { value: "closed", label: "Закрытые" },
-                  ]}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <ArchiveFilter
-                  value={archiveFilter}
-                  onChange={setArchiveFilter}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <div className="flex gap-2">
-                  <CustomSelect
-                    value={sortBy}
-                    onChange={setSortBy}
-                    placeholder="Сортировка"
-                    options={[
-                      { value: "created_at", label: "Дата создания" },
-                      { value: "due_date", label: "Срок выполнения" },
-                      { value: "priority", label: "Приоритет" },
-                      { value: "status", label: "Статус" },
-                      { value: "title", label: "Название" },
-                    ]}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  >
-                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                  </Button>
+      <div className="mb-6 mx-6">
+        <CollapsibleFilter defaultOpen={false}>
+          <Card className="overflow-visible">
+            <CardContent className="p-4 overflow-visible">
+              <div className="flex flex-col gap-4 overflow-visible">
+                {/* Primary filters row */}
+                <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Поиск по названию или описанию..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                      placeholder="Статус"
+                      options={[
+                        { value: "all", label: "Все статусы" },
+                        { value: "new", label: "Новая" },
+                        { value: "in_progress", label: "В работе" },
+                        { value: "done", label: "Выполнена" },
+                        { value: "cancelled", label: "Отменена" },
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={statusGroupFilter}
+                      onChange={setStatusGroupFilter}
+                      placeholder="Группа статусов"
+                      options={[
+                        { value: "all", label: "Все группы" },
+                        { value: "active", label: "Активные" },
+                        { value: "closed", label: "Закрытые" },
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <ArchiveFilter
+                      value={archiveFilter}
+                      onChange={setArchiveFilter}
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <div className="flex gap-2">
+                      <CustomSelect
+                        value={sortBy}
+                        onChange={setSortBy}
+                        placeholder="Сортировка"
+                        options={[
+                          { value: "created_at", label: "Дата создания" },
+                          { value: "due_date", label: "Срок выполнения" },
+                          { value: "priority", label: "Приоритет" },
+                          { value: "status", label: "Статус" },
+                          { value: "title", label: "Название" },
+                        ]}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                      >
+                        {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="w-full sm:w-auto">
+                    <Button variant="outline" onClick={resetFilters}>
+                      Сбросить
+                    </Button>
+                  </div>
+                </div>
+                {/* Secondary filters row */}
+                <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <ComboboxSelect
+                      value={assigneeIdFilter}
+                      onChange={setAssigneeIdFilter}
+                      placeholder="Исполнитель"
+                      searchPlaceholder="Поиск пользователя..."
+                      emptyText="Пользователь не найден"
+                      options={users.map((user) => ({
+                        value: user.id.toString(),
+                        label: user.full_name || `Пользователь #${user.id}`
+                      }))}
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <ComboboxSelect
+                      value={creatorIdFilter}
+                      onChange={setCreatorIdFilter}
+                      placeholder="Создатель"
+                      searchPlaceholder="Поиск пользователя..."
+                      emptyText="Пользователь не найден"
+                      options={users.map((user) => ({
+                        value: user.id.toString(),
+                        label: user.full_name || `Пользователь #${user.id}`
+                      }))}
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <Input
+                      placeholder="ID сущности"
+                      value={entityIdFilter}
+                      onChange={(e) => setEntityIdFilter(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={entityTypeFilter}
+                      onChange={setEntityTypeFilter}
+                      placeholder="Тип сущности"
+                      options={[
+                        { value: "", label: "Все типы" },
+                        { value: "lead", label: "Лид" },
+                        { value: "deal", label: "Сделка" },
+                        { value: "client", label: "Клиент" },
+                      ]}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="w-full sm:w-auto">
-                <Button variant="outline" onClick={resetFilters}>
-                  Сбросить
-                </Button>
-              </div>
-            </div>
-            {/* Secondary filters row */}
-            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
-              <div className="w-full sm:w-48 overflow-visible">
-                <ComboboxSelect
-                  value={assigneeIdFilter}
-                  onChange={setAssigneeIdFilter}
-                  placeholder="Исполнитель"
-                  searchPlaceholder="Поиск пользователя..."
-                  emptyText="Пользователь не найден"
-                  options={users.map((user) => ({
-                    value: user.id.toString(),
-                    label: user.full_name || `Пользователь #${user.id}`
-                  }))}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <ComboboxSelect
-                  value={creatorIdFilter}
-                  onChange={setCreatorIdFilter}
-                  placeholder="Создатель"
-                  searchPlaceholder="Поиск пользователя..."
-                  emptyText="Пользователь не найден"
-                  options={users.map((user) => ({
-                    value: user.id.toString(),
-                    label: user.full_name || `Пользователь #${user.id}`
-                  }))}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <Input
-                  placeholder="ID сущности"
-                  value={entityIdFilter}
-                  onChange={(e) => setEntityIdFilter(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={entityTypeFilter}
-                  onChange={setEntityTypeFilter}
-                  placeholder="Тип сущности"
-                  options={[
-                    { value: "", label: "Все типы" },
-                    { value: "lead", label: "Лид" },
-                    { value: "deal", label: "Сделка" },
-                    { value: "client", label: "Клиент" },
-                  ]}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </CollapsibleFilter>
+      </div>
 
       {/* Tasks Table */}
       <Card className="mx-6 mb-6">

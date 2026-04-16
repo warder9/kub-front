@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
+import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -161,6 +162,17 @@ export default function DealsPage() {
     }
     return roleMapping[roleId] || 'user'
   }
+
+  // Helper function to get role code from user data
+  const getRoleCode = (user: any) => {
+    if (!user) return undefined;
+    if (typeof user.role === 'string') return user.role;
+    if (user.role?.code) return user.role.code;
+    if (user.role_id) {
+      return getRoleFromId(user.role_id);
+    }
+    return undefined;
+  };
 
   // Fetch user data like sidebar does
   useEffect(() => {
@@ -1101,140 +1113,142 @@ export default function DealsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mb-6 overflow-visible">
-        <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col gap-4 overflow-visible">
-            {/* Primary filters row */}
-            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Поиск по клиенту, ИИН/БИН, телефону, email, сумме..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+      <CollapsibleFilter defaultOpen={false}>
+        <Card className="overflow-visible">
+          <CardContent className="p-4 overflow-visible">
+            <div className="flex flex-col gap-4 overflow-visible">
+              {/* Primary filters row */}
+              <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Поиск по клиенту, ИИН/БИН, телефону, email, сумме..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <CustomSelect
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    placeholder="Статус"
+                    className="w-full"
+                    options={[
+                      { value: "all", label: "Все статусы" },
+                      { value: "new", label: "Новая" },
+                      { value: "in_progress", label: "В работе" },
+                      { value: "negotiation", label: "Переговоры" },
+                      { value: "won", label: "Выиграна" },
+                      { value: "lost", label: "Проиграна" },
+                      { value: "cancelled", label: "Отменена" },
+                    ]}
                   />
                 </div>
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  placeholder="Статус"
-                  className="w-full"
-                  options={[
-                    { value: "all", label: "Все статусы" },
-                    { value: "new", label: "Новая" },
-                    { value: "in_progress", label: "В работе" },
-                    { value: "negotiation", label: "Переговоры" },
-                    { value: "won", label: "Выиграна" },
-                    { value: "lost", label: "Проиграна" },
-                    { value: "cancelled", label: "Отменена" },
-                  ]}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={statusGroupFilter}
-                  onChange={setStatusGroupFilter}
-                  placeholder="Группа статусов"
-                  className="w-full"
-                  options={[
-                    { value: "all", label: "Все группы" },
-                    { value: "active", label: "Активные" },
-                    { value: "completed", label: "Завершенные" },
-                    { value: "closed", label: "Закрытые" },
-                  ]}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <ArchiveFilter
-                  value={archiveFilter}
-                  onChange={setArchiveFilter}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <div className="flex gap-2">
+                <div className="w-full sm:w-48 overflow-visible">
                   <CustomSelect
-                    value={sortBy}
-                    onChange={setSortBy}
-                    placeholder="Сортировка"
+                    value={statusGroupFilter}
+                    onChange={setStatusGroupFilter}
+                    placeholder="Группа статусов"
+                    className="w-full"
                     options={[
-                      { value: "created_at", label: "Дата создания" },
-                      { value: "amount", label: "Сумма" },
-                      { value: "status", label: "Статус" },
-                      { value: "client_name", label: "Имя клиента" },
+                      { value: "all", label: "Все группы" },
+                      { value: "active", label: "Активные" },
+                      { value: "completed", label: "Завершенные" },
+                      { value: "closed", label: "Закрытые" },
                     ]}
-                    className="flex-1"
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  >
-                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <ArchiveFilter
+                    value={archiveFilter}
+                    onChange={setArchiveFilter}
+                  />
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <div className="flex gap-2">
+                    <CustomSelect
+                      value={sortBy}
+                      onChange={setSortBy}
+                      placeholder="Сортировка"
+                      options={[
+                        { value: "created_at", label: "Дата создания" },
+                        { value: "amount", label: "Сумма" },
+                        { value: "status", label: "Статус" },
+                        { value: "client_name", label: "Имя клиента" },
+                      ]}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    >
+                      {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="w-full sm:w-auto">
+                  <Button variant="outline" onClick={resetFilters}>
+                    Сбросить
                   </Button>
                 </div>
               </div>
-              <div className="w-full sm:w-auto">
-                <Button variant="outline" onClick={resetFilters}>
-                  Сбросить
-                </Button>
+              {/* Secondary filters row */}
+              <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
+                <div className="w-full sm:w-32 overflow-visible">
+                  <Input
+                    placeholder="Сумма от"
+                    type="number"
+                    value={amountMin}
+                    onChange={(e) => setAmountMin(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div className="w-full sm:w-32 overflow-visible">
+                  <Input
+                    placeholder="Сумма до"
+                    type="number"
+                    value={amountMax}
+                    onChange={(e) => setAmountMax(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div className="w-full sm:w-40 overflow-visible">
+                  <CustomSelect
+                    value={currencyFilter}
+                    onChange={setCurrencyFilter}
+                    placeholder="Валюта"
+                    className="w-full"
+                    options={[
+                      { value: "", label: "Все валюты" },
+                      { value: "KZT", label: "KZT" },
+                      { value: "USD", label: "USD" },
+                      { value: "EUR", label: "EUR" },
+                      { value: "RUB", label: "RUB" },
+                    ]}
+                  />
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <ComboboxSelect
+                    value={clientFilter}
+                    onChange={setClientFilter}
+                    placeholder="Клиент"
+                    searchPlaceholder="Поиск клиента..."
+                    emptyText="Клиент не найден"
+                    options={clients.map((client) => ({
+                      value: client.id.toString(),
+                      label: client.name || `Клиент #${client.id}`
+                    }))}
+                  />
+                </div>
               </div>
             </div>
-            {/* Secondary filters row */}
-            <div className="flex flex-col lg:flex-row gap-4 overflow-visible">
-              <div className="w-full sm:w-32 overflow-visible">
-                <Input
-                  placeholder="Сумма от"
-                  type="number"
-                  value={amountMin}
-                  onChange={(e) => setAmountMin(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full sm:w-32 overflow-visible">
-                <Input
-                  placeholder="Сумма до"
-                  type="number"
-                  value={amountMax}
-                  onChange={(e) => setAmountMax(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full sm:w-40 overflow-visible">
-                <CustomSelect
-                  value={currencyFilter}
-                  onChange={setCurrencyFilter}
-                  placeholder="Валюта"
-                  className="w-full"
-                  options={[
-                    { value: "", label: "Все валюты" },
-                    { value: "KZT", label: "KZT" },
-                    { value: "USD", label: "USD" },
-                    { value: "EUR", label: "EUR" },
-                    { value: "RUB", label: "RUB" },
-                  ]}
-                />
-              </div>
-              <div className="w-full sm:w-48 overflow-visible">
-                <ComboboxSelect
-                  value={clientFilter}
-                  onChange={setClientFilter}
-                  placeholder="Клиент"
-                  searchPlaceholder="Поиск клиента..."
-                  emptyText="Клиент не найден"
-                  options={clients.map((client) => ({
-                    value: client.id.toString(),
-                    label: client.name || `Клиент #${client.id}`
-                  }))}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </CollapsibleFilter>
 
       {/* Deals Table */}
       <Card>

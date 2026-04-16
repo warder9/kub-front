@@ -76,6 +76,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
+import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
@@ -170,6 +171,17 @@ export default function LeadsPage() {
     }
     return roleMapping[roleId] || 'user'
   }
+
+  // Helper function to get role code from user data
+  const getRoleCode = (user: any) => {
+    if (!user) return undefined;
+    if (typeof user.role === 'string') return user.role;
+    if (user.role?.code) return user.role.code;
+    if (user.role_id) {
+      return getRoleFromId(user.role_id);
+    }
+    return undefined;
+  };
 
   // Fetch user data like sidebar does
   useEffect(() => {
@@ -786,89 +798,93 @@ export default function LeadsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mx-6 mb-6 overflow-visible">
-        <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Введите название или описание..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+      <div className="mx-6 mb-6">
+        <CollapsibleFilter defaultOpen={false}>
+          <Card className="overflow-visible">
+            <CardContent className="p-4 overflow-visible">
+              <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Введите название или описание..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                {/* View selector - only for non-sales users */}
+                {(() => {
+                  let roleId = 0;
+                  if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
+                    roleId = (user.role as any).id;
+                  }
+                  const userRole = getRoleFromId(roleId || 0);
+                  return user && userRole !== 'sales';
+                })() && (
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={view}
+                      onChange={(val) => setView(val as "all" | "my")}
+                      placeholder="Режим просмотра"
+                      options={[
+                        { value: "all", label: "Все лиды" },
+                        { value: "my", label: "Мои лиды" },
+                      ]}
+                    />
+                  </div>
+                )}
+                <div className="w-full sm:w-48 overflow-visible">
+                  <CustomSelect
+                    value={statusGroupFilter}
+                    onChange={setStatusGroupFilter}
+                    placeholder="Группа статусов"
+                    options={[
+                      { value: "all", label: "Все статусы" },
+                      { value: "active", label: "Активные" },
+                      { value: "closed", label: "Закрытые" },
+                    ]}
+                  />
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <ArchiveFilter
+                    value={archiveFilter}
+                    onChange={setArchiveFilter}
+                  />
+                </div>
+                <div className="w-full sm:w-48 overflow-visible">
+                  <div className="flex gap-2">
+                    <CustomSelect
+                      value={sortBy}
+                      onChange={setSortBy}
+                      placeholder="Сортировка"
+                      options={[
+                        { value: "created_at", label: "Дата создания" },
+                        { value: "status", label: "Статус" },
+                        { value: "title", label: "Название" },
+                      ]}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    >
+                      {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="w-full sm:w-auto">
+                  <Button variant="outline" onClick={resetFilters}>
+                    Сбросить
+                  </Button>
+                </div>
               </div>
-            </div>
-            {/* View selector - only for non-sales users */}
-            {(() => {
-              let roleId = 0;
-              if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-                roleId = (user.role as any).id;
-              }
-              const userRole = getRoleFromId(roleId || 0);
-              return user && userRole !== 'sales';
-            })() && (
-              <div className="w-full sm:w-48 overflow-visible">
-                <CustomSelect
-                  value={view}
-                  onChange={(val) => setView(val as "all" | "my")}
-                  placeholder="Режим просмотра"
-                  options={[
-                    { value: "all", label: "Все лиды" },
-                    { value: "my", label: "Мои лиды" },
-                  ]}
-                />
-              </div>
-            )}
-            <div className="w-full sm:w-48 overflow-visible">
-              <CustomSelect
-                value={statusGroupFilter}
-                onChange={setStatusGroupFilter}
-                placeholder="Группа статусов"
-                options={[
-                  { value: "all", label: "Все статусы" },
-                  { value: "active", label: "Активные" },
-                  { value: "closed", label: "Закрытые" },
-                ]}
-              />
-            </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <ArchiveFilter
-                value={archiveFilter}
-                onChange={setArchiveFilter}
-              />
-            </div>
-            <div className="w-full sm:w-48 overflow-visible">
-              <div className="flex gap-2">
-                <CustomSelect
-                  value={sortBy}
-                  onChange={setSortBy}
-                  placeholder="Сортировка"
-                  options={[
-                    { value: "created_at", label: "Дата создания" },
-                    { value: "status", label: "Статус" },
-                    { value: "title", label: "Название" },
-                  ]}
-                  className="flex-1"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                >
-                  {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-            <div className="w-full sm:w-auto">
-              <Button variant="outline" onClick={resetFilters}>
-                Сбросить
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </CollapsibleFilter>
+      </div>
 
       {/* Table */}
       <Card className="mx-6 mb-6">

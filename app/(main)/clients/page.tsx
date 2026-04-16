@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
+import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as ClientAPI from "@/src/api/clients.api";
 import * as AuthAPI from "@/src/api/auth.api";
 import { Spinner } from "@/components/ui/spinner";
@@ -429,23 +430,42 @@ export default function ClientsPage() {
   
   // State for fresh user data from API
   const [freshUserData, setFreshUserData] = useState<any>(null);
-  
+
+  // Helper function to get role code from user data
+  const getRoleCode = (user: any) => {
+    if (!user) return undefined;
+    if (typeof user.role === 'string') return user.role;
+    if (user.role?.code) return user.role.code;
+    if (user.role_id) {
+      const roleMap: Record<number, string> = {
+        50: 'system_admin',
+        40: 'leadership',
+        30: 'control',
+        20: 'operations',
+        10: 'sales'
+      };
+      return roleMap[user.role_id] || 'user';
+    }
+    return undefined;
+  };
+
   // Get fresh user data for each render
   const user = freshUserData || getCurrentUser();
-  const canCreate = user && hasPermission(user.role, ["clients:write"]);
-  const canEdit = user && hasPermission(user.role, ["clients:write"]);
-  const canDelete = user && hasPermission(user.role, ["clients:write"]);
+  const userRole = getRoleCode(user);
+  const canCreate = user && hasPermission(userRole, ["clients:write"]);
+  const canEdit = user && hasPermission(userRole, ["clients:write"]);
+  const canDelete = user && hasPermission(userRole, ["clients:write"]);
 
   // Debug logging
   useEffect(() => {
     console.log('Clients page debug:', {
       user: user,
-      userRole: user?.role,
+      userRole: userRole,
       canCreate,
       canEdit,
       canDelete
     });
-  }, [user, canCreate, canEdit, canDelete]);
+  }, [user, userRole, canCreate, canEdit, canDelete]);
 
   // Fetch fresh user data on mount
   useEffect(() => {
@@ -1298,112 +1318,114 @@ useEffect(() => {
           </div>
       </div>
 
-      <Card className="mb-6 overflow-visible">
-        <CardContent className="p-4 overflow-visible">
-          <div className="flex flex-col gap-4 overflow-visible">
-            {/* Primary filters row */}
-            <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Введите данные для поиска..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="w-48 relative overflow-visible">
-                <CustomSelect
-                  value={clientTypeFilter}
-                  onChange={(value) => setClientTypeFilter(value)}
-                  placeholder="Тип клиента"
-                  options={[
-                    { value: "", label: "Все типы" },
-                    { value: "individual", label: "Физическое лицо" },
-                    { value: "legal", label: "Юридическое лицо" },
-                  ]}
-                />
-              </div>
-              <div className="w-48 overflow-visible">
-                <ArchiveFilter
-                  value={archiveFilter}
-                  onChange={setArchiveFilter}
-                />
-              </div>
-              <div className="w-48 overflow-visible">
-                <div className="flex gap-2">
-                  <CustomSelect
-                    value={sortBy}
-                    onChange={setSortBy}
-                    placeholder="Сортировка"
-                    options={[
-                      { value: "created_at", label: "Дата создания" },
-                      { value: "name", label: "Имя" },
-                      { value: "display_name", label: "Отображаемое имя" },
-                      { value: "client_type", label: "Тип клиента" },
-                    ]}
-                    className="flex-1"
+      <CollapsibleFilter defaultOpen={false}>
+        <Card className="overflow-visible">
+          <CardContent className="p-4 overflow-visible">
+            <div className="flex flex-col gap-4 overflow-visible">
+              {/* Primary filters row */}
+              <div className="flex flex-col sm:flex-row gap-4 overflow-visible">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Введите данные для поиска..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  >
-                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                  </Button>
                 </div>
+                <div className="w-48 relative overflow-visible">
+                  <CustomSelect
+                    value={clientTypeFilter}
+                    onChange={(value) => setClientTypeFilter(value)}
+                    placeholder="Тип клиента"
+                    options={[
+                      { value: "", label: "Все типы" },
+                      { value: "individual", label: "Физическое лицо" },
+                      { value: "legal", label: "Юридическое лицо" },
+                    ]}
+                  />
+                </div>
+                <div className="w-48 overflow-visible">
+                  <ArchiveFilter
+                    value={archiveFilter}
+                    onChange={setArchiveFilter}
+                  />
+                </div>
+                <div className="w-48 overflow-visible">
+                  <div className="flex gap-2">
+                    <CustomSelect
+                      value={sortBy}
+                      onChange={setSortBy}
+                      placeholder="Сортировка"
+                      options={[
+                        { value: "created_at", label: "Дата создания" },
+                        { value: "name", label: "Имя" },
+                        { value: "display_name", label: "Отображаемое имя" },
+                        { value: "client_type", label: "Тип клиента" },
+                      ]}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    >
+                      {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={resetFilters}>
+                  Сбросить
+                </Button>
               </div>
-              <Button variant="outline" onClick={resetFilters}>
-                Сбросить
-              </Button>
-            </div>
-            {/* Secondary filters row */}
-            <div className="flex flex-wrap items-center gap-2 flex-shrink-0 overflow-visible">
-              <div className="w-48 overflow-visible">
-                <CustomSelect
-                  value={hasDealsFilter}
-                  onChange={setHasDealsFilter}
-                  placeholder="Сделки"
-                  options={[
-                    { value: "", label: "Все" },
-                    { value: "true", label: "Со сделками" },
-                    { value: "false", label: "Без сделок" },
-                  ]}
-                />
-              </div>
-              <div className="w-48 overflow-visible">
-                <CustomSelect
-                  value={dealStatusGroupFilter}
-                  onChange={setDealStatusGroupFilter}
-                  placeholder="Статус сделок"
-                  options={[
-                    { value: "all", label: "Все статусы" },
-                    { value: "active", label: "Активные" },
-                    { value: "completed", label: "Завершенные" },
-                    { value: "closed", label: "Закрытые" },
-                  ]}
-                />
-              </div>
-              {user?.role !== 'sales' && (
+              {/* Secondary filters row */}
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0 overflow-visible">
+                <div className="w-48 overflow-visible">
+                  <CustomSelect
+                    value={hasDealsFilter}
+                    onChange={setHasDealsFilter}
+                    placeholder="Сделки"
+                    options={[
+                      { value: "", label: "Все" },
+                      { value: "true", label: "Со сделками" },
+                      { value: "false", label: "Без сделок" },
+                    ]}
+                  />
+                </div>
+                <div className="w-48 overflow-visible">
+                  <CustomSelect
+                    value={dealStatusGroupFilter}
+                    onChange={setDealStatusGroupFilter}
+                    placeholder="Статус сделок"
+                    options={[
+                      { value: "all", label: "Все статусы" },
+                      { value: "active", label: "Активные" },
+                      { value: "completed", label: "Завершенные" },
+                      { value: "closed", label: "Закрытые" },
+                    ]}
+                  />
+                </div>
+                {user?.role !== 'sales' && (
+                  <Button
+                    variant={clientView === "all" ? "secondary" : "outline"}
+                    onClick={() => setClientView("all")}
+                    className="whitespace-nowrap"
+                  >
+                    Все клиенты
+                  </Button>
+                )}
                 <Button
-                  variant={clientView === "all" ? "secondary" : "outline"}
-                  onClick={() => setClientView("all")}
+                  variant={clientView === "my" ? "secondary" : "outline"}
+                  onClick={() => setClientView("my")}
                   className="whitespace-nowrap"
                 >
-                  Все клиенты
+                  Мои клиенты
                 </Button>
-              )}
-              <Button
-                variant={clientView === "my" ? "secondary" : "outline"}
-                onClick={() => setClientView("my")}
-                className="whitespace-nowrap"
-              >
-                Мои клиенты
-              </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </CollapsibleFilter>
 
       <Card className="overflow-visible">
         <CardHeader>
