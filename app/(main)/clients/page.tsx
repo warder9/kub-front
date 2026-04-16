@@ -1592,57 +1592,59 @@ useEffect(() => {
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] p-4">
             <div className="space-y-8">
-              {/* Client Type */}
-              <div className="space-y-2">
-                <Label htmlFor="client_type">Тип лица *</Label>
-                <CustomSelect
-                  value={clientFormData.client_type || "individual"}
-                  onChange={(value) => setClientFormData(prev => ({ ...prev, client_type: value }))}
-                  options={[
-                    { value: "individual", label: "Физическое лицо" },
-                    { value: "legal", label: "Юридическое лицо" }
-                  ]}
-                  placeholder="Выберите тип лица..."
-                  disabled={!!editingClient}
-                />
-                {editingClient && (
-                  <p className="text-xs text-muted-foreground">Тип лица нельзя изменить после создания</p>
+              {/* Client Type and Photo - Side by Side for Individual Clients */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Client Type */}
+                <div className="space-y-2">
+                  <Label htmlFor="client_type">Тип лица *</Label>
+                  <CustomSelect
+                    value={clientFormData.client_type || "individual"}
+                    onChange={(value) => setClientFormData(prev => ({ ...prev, client_type: value }))}
+                    options={[
+                      { value: "individual", label: "Физическое лицо" },
+                      { value: "legal", label: "Юридическое лицо" }
+                    ]}
+                    placeholder="Выберите тип лица..."
+                    disabled={!!editingClient}
+                  />
+                  {editingClient && (
+                    <p className="text-xs text-muted-foreground">Тип лица нельзя изменить после создания</p>
+                  )}
+                </div>
+
+                {/* Photo Section - Only for Individual Clients */}
+                {clientFormData.client_type === "individual" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="photo_35x45">Фото клиента (35x45)</Label>
+                    <Input
+                      id="photo_35x45"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSelectedPhotoFile(file);
+                          const preview = URL.createObjectURL(file);
+                          setPhotoPreview(preview);
+                        }
+                      }}
+                    />
+                    {(photoPreview || (editingClient && clientFormData.photo_35x45)) && (
+                      <div className="mt-2">
+                        <img
+                          src={photoPreview || clientFormData.photo_35x45 || ""}
+                          alt="Preview"
+                          className="max-w-xs rounded-lg border"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* Individual Client Fields */}
               {clientFormData.client_type === "individual" && (
                 <>
-                  {/* Photo Section */}
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg">ФОТО</h3>
-                    <Separator />
-                    <div className="space-y-2">
-                      <Label htmlFor="photo_35x45">Фото клиента (35x45)</Label>
-                      <Input
-                        id="photo_35x45"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setSelectedPhotoFile(file);
-                            const preview = URL.createObjectURL(file);
-                            setPhotoPreview(preview);
-                          }
-                        }}
-                      />
-                      {(photoPreview || (editingClient && clientFormData.photo_35x45)) && (
-                        <div className="mt-2">
-                          <img
-                            src={photoPreview || clientFormData.photo_35x45 || ""}
-                            alt="Preview"
-                            className="max-w-xs rounded-lg border"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
                   {/* Country and Trip Purpose - FIRST */}
                   <div className="space-y-4 border-t pt-4">

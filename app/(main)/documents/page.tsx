@@ -122,6 +122,7 @@ import {
 } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
+import { SendForSignatureModal } from "@/components/send-for-signature-modal"
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -487,6 +488,11 @@ export default function DocumentsPage() {
     const [signLinkUrl, setSignLinkUrl] = useState("")
     const [signLinkLoading, setSignLinkLoading] = useState(false)
     const [signEmail, setSignEmail] = useState("")
+
+    // ─── New Send for Signature Modal (with channel selection) ───────
+
+    const [isNewSignModalOpen, setIsNewSignModalOpen] = useState(false)
+    const [newSignDoc, setNewSignDoc] = useState<Document | null>(null)
 
     // ─── PDF Viewer ─────────────────────────────────────────────
 
@@ -1006,7 +1012,7 @@ export default function DocumentsPage() {
             toast.error("Введите email адрес")
             return
         }
-        
+
         setSignLinkLoading(true)
         try {
             await startSign(signLinkDoc.id, signEmail)
@@ -1020,6 +1026,17 @@ export default function DocumentsPage() {
         } finally {
             setSignLinkLoading(false)
         }
+    }
+
+    // ─── New Send for Signature Handler (with channel selection) ───────
+
+    const handleNewSendForSign = (doc: Document) => {
+        setNewSignDoc(doc)
+        setIsNewSignModalOpen(true)
+    }
+
+    const handleNewSignSuccess = async () => {
+        await fetchDocuments()
     }
 
     // ─── Details ────────────────────────────────────────────────
@@ -1491,8 +1508,8 @@ export default function DocumentsPage() {
                                                                 </DropdownMenuItem>
                                                             )}
                                                             {!isReadOnly && canSign && (
-                                                                <DropdownMenuItem onClick={() => handleSendForSign(doc)}>
-                                                                    <Link className="h-4 w-4 mr-2" />
+                                                                <DropdownMenuItem onClick={() => handleNewSendForSign(doc)}>
+                                                                    <Send className="h-4 w-4 mr-2" />
                                                                     Отправить на подпись
                                                                 </DropdownMenuItem>
                                                             )}
@@ -1999,6 +2016,15 @@ export default function DocumentsPage() {
                 onClose={() => setIsPdfViewerOpen(false)}
                 documentId={selectedPdfDoc?.id || 0}
                 documentName={selectedPdfDoc ? (docTypeLabels[selectedPdfDoc.doc_type] || selectedPdfDoc.doc_type) : undefined}
+            />
+
+            {/* ── New Send for Signature Modal (with channel selection) ──── */}
+            <SendForSignatureModal
+                open={isNewSignModalOpen}
+                onOpenChange={setIsNewSignModalOpen}
+                document={newSignDoc}
+                onSuccess={handleNewSignSuccess}
+                docTypeLabel={newSignDoc ? (docTypeLabels[newSignDoc.doc_type] || newSignDoc.doc_type) : undefined}
             />
 
             {/* ── Archive Dialog ─────────────────────────────────────────── */}

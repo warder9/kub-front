@@ -141,6 +141,16 @@ export async function reviewDocument(id: number, action: 'approve' | 'return'): 
 
 // ─── Signing Workflow ────────────────────────────────────────────
 
+export async function getSignContactOptions(id: number): Promise<Models.SignContactOptions> {
+  const res = await api.get(`/documents/${id}/sign/contact-options`)
+  return res.data
+}
+
+export async function startSignWithChannel(id: number, payload: Models.SignStartRequest): Promise<Models.SignStartResponse> {
+  const res = await api.post(`/documents/${id}/sign/start`, payload)
+  return res.data
+}
+
 export async function startSign(id: number, email?: string): Promise<any> {
   const body = email ? { email } : undefined
   const res = await api.post(`/documents/${id}/sign/start`, body)

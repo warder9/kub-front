@@ -48,3 +48,30 @@ export type Documents_Upload_document_Request = {
   doc_type: DocType;
   file: File;
 }
+
+// ─── Signing Contact Options ─────────────────────────────────────
+
+export type SignChannel = 'sms' | 'email';
+
+export interface SignContactOptions {
+  document_id: number;
+  client_id: number;
+  default_phone?: string;
+  default_email?: string;
+  resolved_full_name?: string;
+  resolved_position?: string;
+  available_channels: SignChannel[];
+  preferred_channel: SignChannel;
+}
+
+export interface SignStartRequest {
+  channel: SignChannel;
+  manual_phone?: string;
+  manual_email?: string;
+}
+
+export interface SignStartResponse {
+  status: string;
+  expires_at?: string;
+  message?: string;
+}
