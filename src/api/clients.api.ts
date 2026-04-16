@@ -52,12 +52,12 @@ export async function createClient(payload: Models.CreateClientRequest): Promise
 }
 
 export async function listClients(params?: { page?: number; size?: number; search?: string; client_type?: string }): Promise<Models.Client[] | { data: Models.Client[]; total: number }> {
-  const res = await api.get('/clients', { params });
+  const res = await api.get('/clients', { params: { ...params, paginate: true } });
   return res.data;
 }
 
 export async function listMyClients(params?: { page?: number; size?: number; search?: string; client_type?: string }): Promise<Models.Client[] | { data: Models.Client[]; total: number }> {
-  const res = await api.get('/clients/my', { params });
+  const res = await api.get('/clients/my', { params: { ...params, paginate: true } });
   return res.data;
 }
 

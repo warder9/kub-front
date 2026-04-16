@@ -37,7 +37,7 @@ export async function list_deals(
   payload?: void, 
   params?: Record<string, any>
 ): Promise<any> {
-  const res = await api.get(`/deals`, { params })
+  const res = await api.get(`/deals`, { params: { ...params, paginate: true } })
   return res.data
 }
 
@@ -45,7 +45,7 @@ export async function list_my_deals(
   payload?: void, 
   params?: Record<string, any>
 ): Promise<any> {
-  const res = await api.get(`/deals/my`, { params })
+  const res = await api.get(`/deals/my`, { params: { ...params, paginate: true } })
   return res.data
 }
 

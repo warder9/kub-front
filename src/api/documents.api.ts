@@ -4,12 +4,12 @@ import type * as Models from '@/src/models/documents.model'
 // ─── List / Get ──────────────────────────────────────────────────
 
 export async function getDocuments(params?: { page?: number; size?: number; search?: string }): Promise<Models.Document[] | { data: Models.Document[]; total: number }> {
-  const res = await api.get(`/documents`, { params })
+  const res = await api.get(`/documents`, { params: { ...params, paginate: true } })
   return res.data
 }
 
 export async function getDocumentsByDeal(dealId: number, params?: { page?: number; size?: number; search?: string }): Promise<Models.Document[] | { data: Models.Document[]; total: number }> {
-  const res = await api.get(`/documents/deal/${dealId}`, { params })
+  const res = await api.get(`/documents/deal/${dealId}`, { params: { ...params, paginate: true } })
   return res.data
 }
 

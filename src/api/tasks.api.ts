@@ -7,12 +7,12 @@ export async function create_task(payload: Models.Tasks_Create_task_Request, par
 }
 
 export async function list_tasks(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/tasks`, { params })
+  const res = await api.get(`/tasks`, { params: { ...params, paginate: true } })
   return res.data
 }
 
 export async function list_my_tasks(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/tasks/my`, { params })
+  const res = await api.get(`/tasks/my`, { params: { ...params, paginate: true } })
   return res.data
 }
 

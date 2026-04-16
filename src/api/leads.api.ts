@@ -27,12 +27,12 @@ export async function convert_lead_to_deal(payload: Models.Leads_Convert_lead_to
 }
 
 export async function list_leads(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/leads`, { params })
+  const res = await api.get(`/leads`, { params: { ...params, paginate: true } })
   return res.data
 }
 
 export async function list_my_leads(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/leads/my`, { params })
+  const res = await api.get(`/leads/my`, { params: { ...params, paginate: true } })
   return res.data
 }
 

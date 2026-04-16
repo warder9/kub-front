@@ -256,6 +256,7 @@ export default function TasksPage() {
 
   const [tasks, setTasks] = useState<any[]>([])
   const [totalTasks, setTotalTasks] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -311,7 +312,7 @@ export default function TasksPage() {
   const [formData, setFormData] = useState(emptyForm)
 
   const currentPage = Number(searchParams.get("page")) || 1
-  const limit = 20
+  const limit = 15
 
   // Initialize filter states from URL
   useEffect(() => {
@@ -355,6 +356,15 @@ export default function TasksPage() {
     setArchiveFilter('active');
     router.push(pathname);
   };
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    if (currentPage > 1) {
+      const params = new URLSearchParams(searchParams);
+      params.set('page', '1');
+      router.push(`${pathname}?${params.toString()}`);
+    }
+  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder]);
 
   // Fetch user data and permissions
   useEffect(() => {
@@ -410,11 +420,22 @@ export default function TasksPage() {
       });
 
       const res = await list_tasks(undefined, params)
-      let data = Array.isArray(res) ? res : (res as any)?.data || []
-      let total = (res as any)?.total || data.length
+      let data;
+      if ((res as any)?.items && Array.isArray((res as any).items)) {
+        data = (res as any).items;
+      } else if (Array.isArray(res)) {
+        data = res;
+      } else if ((res as any)?.data && Array.isArray((res as any).data)) {
+        data = (res as any).data;
+      } else {
+        data = [];
+      }
+      let total = (res as any)?.pagination?.total || (res as any)?.total || data.length
+      const totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / limit)
 
       setTasks(data)
       setTotalTasks(total)
+      setTotalPages(totalPagesFromBackend)
     } catch (err: any) {
       console.error("Error loading tasks:", err)
       toast.error(err?.message || "Ошибка при загрузке задач")
@@ -1172,12 +1193,13 @@ export default function TasksPage() {
           )}
         </CardContent>
 
-        {totalTasks > limit && (
+        {totalPages > 1 && (
           <div className="pb-4">
             <PaginationControls
               currentPage={currentPage}
-              totalPages={Math.ceil(totalTasks / limit)}
+              totalPages={totalPages}
               onPageChange={handlePageChange}
+              isLoading={isLoading}
             />
           </div>
         )}

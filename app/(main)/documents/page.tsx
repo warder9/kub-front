@@ -379,6 +379,7 @@ export default function DocumentsPage() {
     const [sortBy, setSortBy] = useState("created_at");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [totalDocuments, setTotalDocuments] = useState(0)
+    const [totalPages, setTotalPages] = useState(0)
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState(false)
 
@@ -502,7 +503,7 @@ export default function DocumentsPage() {
     // ─── Pagination ─────────────────────────────────────────────
 
     const currentPage = Number(searchParams.get("page")) || 1
-    const size = 50
+    const size = 15
 
     // Initialize filter states from URL
     useEffect(() => {
@@ -545,6 +546,15 @@ export default function DocumentsPage() {
         router.push(pathname);
     };
 
+    // Reset page to 1 when filters change
+    useEffect(() => {
+        if (currentPage > 1) {
+            const params = new URLSearchParams(searchParams);
+            params.set('page', '1');
+            router.push(`${pathname}?${params.toString()}`);
+        }
+    }, [statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder]);
+
     // ─── Fetch Documents ─────────────────────────────────────────
 
     const fetchDocuments = async () => {
@@ -561,8 +571,18 @@ export default function DocumentsPage() {
                     if (searchTerm) params.q = searchTerm
 
                     const res = await getDocumentsByDeal(selectedDealId, params)
-                    let data = Array.isArray(res) ? res : (res as any)?.data || []
-                    const total = (res as any)?.total || data.length
+                    let data;
+                    if ((res as any)?.items && Array.isArray((res as any).items)) {
+                        data = (res as any).items;
+                    } else if (Array.isArray(res)) {
+                        data = res;
+                    } else if ((res as any)?.data && Array.isArray((res as any).data)) {
+                        data = (res as any).data;
+                    } else {
+                        data = [];
+                    }
+                    const total = (res as any)?.pagination?.total || (res as any)?.total || data.length
+                    const totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / size)
 
                     // Client-side filtering as fallback if backend doesn't support search
                     if (searchTerm) {
@@ -583,7 +603,8 @@ export default function DocumentsPage() {
                     }
 
                     setDocuments(data)
-                    setTotalDocuments(data.length)
+                    setTotalDocuments(total)
+                    setTotalPages(totalPagesFromBackend)
                 } else {
                     // Sales user without selected deal - fetch their deals first, then documents
                     const dealsRes = await DealsAPI.list_my_deals(undefined, {})
@@ -648,11 +669,22 @@ export default function DocumentsPage() {
                 params.order = sortOrder
 
                 const res = await getDocuments(params)
-                let data = Array.isArray(res) ? res : (res as any)?.data || []
-                let total = (res as any)?.total || data.length
+                let data;
+                if ((res as any)?.items && Array.isArray((res as any).items)) {
+                    data = (res as any).items;
+                } else if (Array.isArray(res)) {
+                    data = res;
+                } else if ((res as any)?.data && Array.isArray((res as any).data)) {
+                    data = (res as any).data;
+                } else {
+                    data = [];
+                }
+                let total = (res as any)?.pagination?.total || (res as any)?.total || data.length
+                const totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / size)
 
                 setDocuments(data)
                 setTotalDocuments(total)
+                setTotalPages(totalPagesFromBackend)
             }
         } catch (err: any) {
             console.error("Error loading documents:", err)
@@ -1553,12 +1585,13 @@ export default function DocumentsPage() {
                         </div>
                     )}
                 </CardContent>
-                {totalDocuments > size && (
+                {totalPages > 1 && (
                     <div className="pb-4">
                         <PaginationControls
                             currentPage={currentPage}
-                            totalPages={Math.ceil(totalDocuments / size)}
+                            totalPages={totalPages}
                             onPageChange={handlePageChange}
+                            isLoading={loading}
                         />
                     </div>
                 )}

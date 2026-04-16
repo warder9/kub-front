@@ -234,8 +234,9 @@ export default function DealsPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const currentPage = Number(searchParams.get('page')) || 1;
-  const limit = 20;
+  const limit = 15;
   const [totalDeals, setTotalDeals] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Initialize filter states from URL
   useEffect(() => {
@@ -279,6 +280,15 @@ export default function DealsPage() {
     setArchiveFilter('active');
     router.push(pathname);
   };
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    if (currentPage > 1) {
+      const params = new URLSearchParams(searchParams);
+      params.set('page', '1');
+      router.push(`${pathname}?${params.toString()}`);
+    }
+  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder]);
 
   const fetchDeals = async () => {
     setIsLoading(true);
@@ -326,11 +336,22 @@ export default function DealsPage() {
       const res = finalView === "all"
         ? await list_deals(undefined, params)
         : await list_my_deals(undefined, params);
-      let data = (res?.data || (Array.isArray(res) ? res : []));
-      let total = res?.total || data.length;
+      let data;
+      if (res?.items && Array.isArray(res.items)) {
+        data = res.items;
+      } else if (Array.isArray(res)) {
+        data = res;
+      } else if (res?.data && Array.isArray(res.data)) {
+        data = res.data;
+      } else {
+        data = [];
+      }
+      let total = res?.pagination?.total || res?.total || data.length;
+      let totalPagesFromBackend = res?.pagination?.total_pages || Math.ceil(total / limit);
 
       setDeals(data);
       setTotalDeals(total);
+      setTotalPages(totalPagesFromBackend);
     } catch (err: any) {
       console.error("Error loading deals:", err);
       setError(err?.message || "Ошибка при загрузке сделок");
@@ -1427,12 +1448,13 @@ export default function DealsPage() {
           </div>
         </CardContent>
 
-        {totalDeals > limit && (
+        {totalPages > 1 && (
           <div className="pb-4">
             <PaginationControls
               currentPage={currentPage}
-              totalPages={Math.ceil(totalDeals / limit)}
+              totalPages={totalPages}
               onPageChange={handlePageChange}
+              isLoading={isLoading}
             />
           </div>
         )}

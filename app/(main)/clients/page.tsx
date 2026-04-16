@@ -377,6 +377,7 @@ export default function ClientsPage() {
 
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -384,7 +385,7 @@ export default function ClientsPage() {
   const pathname = usePathname();
   const router = useRouter();
   const currentPage = Number(searchParams.get('page')) || 1;
-  const limit = 20;
+  const limit = 15;
 
   // Initialize filter states from URL
   useEffect(() => {
@@ -419,6 +420,15 @@ export default function ClientsPage() {
     setArchiveFilter('active');
     router.push(pathname);
   };
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    if (currentPage > 1) {
+      const params = new URLSearchParams(searchParams);
+      params.set('page', '1');
+      router.push(`${pathname}?${params.toString()}`);
+    }
+  }, [clientTypeFilter, hasDealsFilter, dealStatusGroupFilter, archiveFilter, sortBy, sortOrder]);
 
   const { toast } = useToast();
   // Remove useMemo - get fresh user data every time
@@ -624,18 +634,30 @@ export default function ClientsPage() {
       console.log('API response:', res);
       console.log('Response type:', Array.isArray(res) ? 'array' : 'object');
 
-      let data = Array.isArray(res) ? res : (res as any)?.data || [];
-      let total = (res as any)?.total || data.length;
+      let data;
+      if ((res as any)?.items && Array.isArray((res as any).items)) {
+        data = (res as any).items;
+      } else if (Array.isArray(res)) {
+        data = res;
+      } else if ((res as any)?.data && Array.isArray((res as any).data)) {
+        data = (res as any).data;
+      } else {
+        data = [];
+      }
+      let total = (res as any)?.pagination?.total || (res as any)?.total || data.length;
+      let totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / limit);
 
       console.log('Processed data:', {
         dataLength: data.length,
         total,
+        totalPagesFromBackend,
         isArray: Array.isArray(data),
         firstItem: data[0]
       });
 
-      setClients(Array.isArray(data) ? data : []);
+      setClients(data);
       setTotalClients(total);
+      setTotalPages(totalPagesFromBackend);
 
       console.log('State updated - clients count:', data.length);
     } catch (err: any) {
@@ -1573,11 +1595,12 @@ useEffect(() => {
         </CardContent>
       </Card>
 
-      {totalClients > limit && (
+      {totalPages > 1 && (
         <PaginationControls
           currentPage={currentPage}
-          totalPages={Math.ceil(totalClients / limit)}
+          totalPages={totalPages}
           onPageChange={handlePageChange}
+          isLoading={isLoading}
         />
       )}
 

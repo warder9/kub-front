@@ -244,8 +244,9 @@ export default function LeadsPage() {
   const pathname = usePathname();
   const router = useRouter();
   const currentPage = Number(searchParams.get('page')) || 1;
-  const limit = 20;
+  const limit = 15;
   const [totalLeads, setTotalLeads] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Initialize filter states from URL
   useEffect(() => {
@@ -276,6 +277,15 @@ export default function LeadsPage() {
     router.push(pathname);
   };
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    if (currentPage > 1) {
+      const params = new URLSearchParams(searchParams);
+      params.set('page', '1');
+      router.push(`${pathname}?${params.toString()}`);
+    }
+  }, [statusGroupFilter, archiveFilter, sortBy, sortOrder]);
+
   const fetchLeads = async () => {
     console.log('fetchLeads called with view:', view, 'user:', user);
     setIsLoading(true);
@@ -296,11 +306,22 @@ export default function LeadsPage() {
       params.order = sortOrder;
 
       const res = await fetchFn(undefined, params);
-      let data = (res?.data || (Array.isArray(res) ? res : []));
-      let total = res?.total || data.length;
+      let data;
+      if (res?.items && Array.isArray(res.items)) {
+        data = res.items;
+      } else if (Array.isArray(res)) {
+        data = res;
+      } else if (res?.data && Array.isArray(res.data)) {
+        data = res.data;
+      } else {
+        data = [];
+      }
+      let total = res?.pagination?.total || res?.total || data.length;
+      let totalPagesFromBackend = res?.pagination?.total_pages || Math.ceil(total / limit);
 
       setLeads(data);
       setTotalLeads(total);
+      setTotalPages(totalPagesFromBackend);
       setError("");
     } catch (err: any) {
       console.log('Error in fetchLeads:', err);
@@ -1022,12 +1043,13 @@ export default function LeadsPage() {
             </Table>
           </div>
         </CardContent>
-        {totalLeads > limit && (
+        {totalPages > 1 && (
           <div className="pb-4">
             <PaginationControls
               currentPage={currentPage}
-              totalPages={Math.ceil(totalLeads / limit)}
+              totalPages={totalPages}
               onPageChange={handlePageChange}
+              isLoading={isLoading}
             />
           </div>
         )}
