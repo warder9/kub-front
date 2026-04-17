@@ -41,8 +41,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Switch } from "@/components/ui/switch";
-import { Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye } from "lucide-react";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import * as UserAPI from "@/src/api/users.api";
 import * as RolesAPI from "@/src/api/roles.api";
 import * as BranchesAPI from "@/src/api/branches.api";
@@ -77,6 +91,74 @@ const DetailItem = ({ label, value }: { label: string; value?: string | number |
     <p className="font-medium">{String(value) || "-"}</p>
   </div>
 );
+
+// ComboboxSelect component for searchable dropdowns
+function ComboboxSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Выберите...",
+  searchPlaceholder = "Поиск...",
+  emptyText = "Ничего не найдено",
+  disabled = false,
+}: {
+  value: string | number
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+  placeholder?: string
+  searchPlaceholder?: string
+  emptyText?: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between"
+          disabled={disabled}
+        >
+          {value
+            ? options.find((option) => option.value === String(value))?.label
+            : placeholder}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => {
+                    onChange(option.value)
+                    setOpen(false)
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -557,10 +639,12 @@ export default function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="branch_id">Филиал</Label>
-                <CustomSelect
+                <ComboboxSelect
                   value={userFormData.branch_id ? String(userFormData.branch_id) : ""}
                   onChange={(value) => setUserFormData(prev => ({ ...prev, branch_id: value ? Number(value) : undefined }))}
                   placeholder={branchesLoading ? "Загрузка филиалов..." : "Выберите филиал..."}
+                  searchPlaceholder="Поиск филиала..."
+                  emptyText="Филиал не найден"
                   disabled={branchesLoading}
                   options={availableBranches.map(branch => ({
                     value: String(branch.id),
