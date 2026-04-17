@@ -41,11 +41,8 @@ export default function DashboardPage() {
       // Redirect based on role
       const adminRoles = ['system_admin'];
       const adminRoleIds = [50];
-      if (user?.role && adminRoles.includes(user.role)) {
+      if (user?.role && (adminRoles.includes(user.role.code) || adminRoleIds.includes(user.role.id))) {
         console.log('Redirecting to /users based on role');
-        router.push("/users");
-      } else if (user?.role_id && adminRoleIds.includes(user.role_id)) {
-        console.log('Redirecting to /users based on role_id');
         router.push("/users");
       } else if (tokenRoleId && adminRoleIds.includes(tokenRoleId)) {
         console.log('Redirecting to /users based on token role_id');

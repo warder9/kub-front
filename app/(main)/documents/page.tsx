@@ -355,8 +355,8 @@ function getRoleCode(user: any) {
     if (!user) return undefined;
     if (typeof user.role === 'string') return user.role;
     if (user.role?.code) return user.role.code;
-    if (user.role_id) {
-        return getRoleKey(user.role_id);
+    if (user.role?.id) {
+        return getRoleKey(user.role.id);
     }
     return undefined;
 }
@@ -877,7 +877,7 @@ export default function DocumentsPage() {
             if (!user) return;
 
             try {
-                const userRole = getRoleKey(user.role_id);
+                const userRole = getRoleKey(user.role?.id);
                 
                 // Load deals
                 const dealsFetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
@@ -905,7 +905,7 @@ export default function DocumentsPage() {
             if (!isCreateOpen || !user) return
             
             try {
-                const userRole = getRoleKey(user.role_id);
+                const userRole = getRoleKey(user.role?.id);
                 const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
                 const res = await fetchFn({ page: 1, size: 1000 });
                 const data = Array.isArray(res) ? res : (res as any)?.data || [];
@@ -929,7 +929,7 @@ export default function DocumentsPage() {
 
         setLoadingDeals(true)
         try {
-            const userRole = getRoleKey(user.role_id);
+            const userRole = getRoleKey(user.role?.id);
             const fetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
             
             const params = { 

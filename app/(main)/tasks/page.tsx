@@ -108,6 +108,7 @@ import {
   unarchive_task,
 } from "@/src/api/tasks.api"
 import { listUsers } from "@/src/api/users.api"
+import * as BranchesAPI from "@/src/api/branches.api"
 
 // ─── Types & Constants ───────────────────────────────────────────
 
@@ -132,8 +133,8 @@ function getRoleCode(user: any) {
   if (!user) return undefined;
   if (typeof user.role === 'string') return user.role;
   if (user.role?.code) return user.role.code;
-  if (user.role_id) {
-    return getRoleFromId(user.role_id);
+  if (user.role?.id) {
+    return getRoleFromId(user.role.id);
   }
   return undefined;
 }
@@ -266,6 +267,9 @@ export default function TasksPage() {
   const [entityIdFilter, setEntityIdFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [branchFilter, setBranchFilter] = useState<number | undefined>(undefined);
+  const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -275,6 +279,13 @@ export default function TasksPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [canWrite, setCanWrite] = useState(false)
+
+  // Check if user has elevated role (leadership, control, system_admin)
+  const isElevatedRole = () => {
+    if (!user?.role) return false;
+    const roleId = user.role?.id;
+    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+  };
 
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -364,7 +375,7 @@ export default function TasksPage() {
       params.set('page', '1');
       router.push(`${pathname}?${params.toString()}`);
     }
-  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder]);
+  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder, branchFilter]);
 
   // Fetch user data and permissions
   useEffect(() => {
@@ -391,6 +402,25 @@ export default function TasksPage() {
     fetchUserData();
   }, []);
 
+  // Fetch branches for elevated roles
+  useEffect(() => {
+    if (isElevatedRole()) {
+      const fetchBranches = async () => {
+        setBranchesLoading(true);
+        try {
+          const res = await BranchesAPI.listBranches();
+          const branchesData = Array.isArray(res) ? res : (res as any)?.data || [];
+          setAvailableBranches(branchesData.map((b: any) => ({ id: b.id, name: b.name })));
+        } catch (e) {
+          console.error("Failed to load branches", e);
+        } finally {
+          setBranchesLoading(false);
+        }
+      };
+      fetchBranches();
+    }
+  }, [user]);
+
   // ─── Data Loading ────────────────────────────────────────────
 
   const fetchTasks = async () => {
@@ -405,6 +435,7 @@ export default function TasksPage() {
       if (entityIdFilter) params.entity_id = entityIdFilter
       if (entityTypeFilter) params.entity_type = entityTypeFilter
       if (archiveFilter !== "active") params.archive = archiveFilter
+      if (branchFilter) params.branch_id = branchFilter
       params.sort_by = sortBy
       params.order = sortOrder
 
@@ -1022,6 +1053,24 @@ export default function TasksPage() {
                       ]}
                     />
                   </div>
+                  {/* Branch filter - only for elevated roles */}
+                  {isElevatedRole() && (
+                    <div className="w-full sm:w-48 overflow-visible">
+                      <CustomSelect
+                        value={branchFilter ? String(branchFilter) : ""}
+                        onChange={(val) => setBranchFilter(val ? Number(val) : undefined)}
+                        placeholder={branchesLoading ? "Загрузка..." : "Филиал"}
+                        disabled={branchesLoading}
+                        options={[
+                          { value: "", label: "Все филиалы" },
+                          ...availableBranches.map(branch => ({
+                            value: String(branch.id),
+                            label: branch.name
+                          }))
+                        ]}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

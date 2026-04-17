@@ -79,6 +79,7 @@ import { ru } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import * as ClientAPI from "@/src/api/clients.api"; // Import all as ClientAPI
+import * as BranchesAPI from "@/src/api/branches.api";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
 import {
@@ -101,6 +102,9 @@ export default function DealsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [statusGroupFilter, setStatusGroupFilter] = useState("all");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [branchFilter, setBranchFilter] = useState<number | undefined>(undefined);
+  const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
@@ -113,6 +117,13 @@ export default function DealsPage() {
   const [user, setUser] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [canWrite, setCanWrite] = useState(false);
+
+  // Check if user has elevated role (leadership, control, system_admin)
+  const isElevatedRole = () => {
+    if (!user?.role) return false;
+    const roleId = user.role?.id;
+    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+  };
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -168,11 +179,30 @@ export default function DealsPage() {
     if (!user) return undefined;
     if (typeof user.role === 'string') return user.role;
     if (user.role?.code) return user.role.code;
-    if (user.role_id) {
-      return getRoleFromId(user.role_id);
+    if (user.role?.id) {
+      return getRoleFromId(user.role.id);
     }
     return undefined;
   };
+
+  // Fetch branches for elevated roles
+  useEffect(() => {
+    if (isElevatedRole()) {
+      const fetchBranches = async () => {
+        setBranchesLoading(true);
+        try {
+          const res = await BranchesAPI.listBranches();
+          const branchesData = Array.isArray(res) ? res : (res as any)?.data || [];
+          setAvailableBranches(branchesData.map((b: any) => ({ id: b.id, name: b.name })));
+        } catch (e) {
+          console.error("Failed to load branches", e);
+        } finally {
+          setBranchesLoading(false);
+        }
+      };
+      fetchBranches();
+    }
+  }, [user]);
 
   // Fetch user data like sidebar does
   useEffect(() => {
@@ -181,7 +211,7 @@ export default function DealsPage() {
         const userData = await getMe();
         setUser(userData);
         // Use role.id and map it to role name like the sidebar does
-        const roleId = (userData as any)?.role?.id || (userData as any)?.role_id || 0;
+        const roleId = (userData as any)?.role?.id || 0;
         const userRole = getRoleFromId(roleId);
         const hasWriteAccess = userData && hasPermission(userRole, ["deals:write"]);
         setCanWrite(hasWriteAccess);
@@ -190,7 +220,7 @@ export default function DealsPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const roleId = (localUser as any)?.role?.id || (localUser as any)?.role_id || 0;
+        const roleId = (localUser as any)?.role?.id || 0;
         const userRole = localUser ? getRoleFromId(roleId) : undefined;
         setCanWrite(!!(localUser && hasPermission(userRole, ["deals:write"])));
       }
@@ -288,7 +318,7 @@ export default function DealsPage() {
       params.set('page', '1');
       router.push(`${pathname}?${params.toString()}`);
     }
-  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder]);
+  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder, branchFilter]);
 
   const fetchDeals = async () => {
     setIsLoading(true);
@@ -303,6 +333,7 @@ export default function DealsPage() {
       if (amountMax) params.amount_max = amountMax;
       if (currencyFilter) params.currency = currencyFilter;
       if (clientFilter) params.client_id = clientFilter;
+      if (branchFilter) params.branch_id = branchFilter;
       params.sort_by = sortBy;
       params.order = sortOrder;
 
@@ -1265,6 +1296,24 @@ export default function DealsPage() {
                     }))}
                   />
                 </div>
+                {/* Branch filter - only for elevated roles */}
+                {isElevatedRole() && (
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={branchFilter ? String(branchFilter) : ""}
+                      onChange={(val) => setBranchFilter(val ? Number(val) : undefined)}
+                      placeholder={branchesLoading ? "Загрузка..." : "Филиал"}
+                      disabled={branchesLoading}
+                      options={[
+                        { value: "", label: "Все филиалы" },
+                        ...availableBranches.map(branch => ({
+                          value: String(branch.id),
+                          label: branch.name
+                        }))
+                      ]}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

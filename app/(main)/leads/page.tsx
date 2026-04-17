@@ -82,6 +82,7 @@ import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
 import * as dealsApi from "@/src/api/deals.api";
 import * as ClientAPI from "@/src/api/clients.api";
+import * as BranchesAPI from "@/src/api/branches.api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -115,6 +116,9 @@ export default function LeadsPage() {
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilterValue>("active");
+  const [branchFilter, setBranchFilter] = useState<number | undefined>(undefined);
+  const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [view, setView] = useState<"all" | "my">(() => {
     // Default to "my" only for sales users, others get "all"
     const user = getCurrentUser();
@@ -160,6 +164,13 @@ export default function LeadsPage() {
   const [user, setUser] = useState<any>(null);
   const [canWrite, setCanWrite] = useState(false);
 
+  // Check if user has elevated role (leadership, control, system_admin)
+  const isElevatedRole = () => {
+    if (!user?.role) return false;
+    const roleId = user.role?.id;
+    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+  };
+
   // Helper function to map role_id to role name (same as sidebar)
   function getRoleFromId(roleId: number): string {
     const roleMapping: Record<number, string> = {
@@ -182,6 +193,25 @@ export default function LeadsPage() {
     }
     return undefined;
   };
+
+  // Fetch branches for elevated roles
+  useEffect(() => {
+    if (isElevatedRole()) {
+      const fetchBranches = async () => {
+        setBranchesLoading(true);
+        try {
+          const res = await BranchesAPI.listBranches();
+          const branchesData = Array.isArray(res) ? res : (res as any)?.data || [];
+          setAvailableBranches(branchesData.map((b: any) => ({ id: b.id, name: b.name })));
+        } catch (e) {
+          console.error("Failed to load branches", e);
+        } finally {
+          setBranchesLoading(false);
+        }
+      };
+      fetchBranches();
+    }
+  }, [user]);
 
   // Fetch user data like sidebar does
   useEffect(() => {
@@ -284,7 +314,7 @@ export default function LeadsPage() {
       params.set('page', '1');
       router.push(`${pathname}?${params.toString()}`);
     }
-  }, [statusGroupFilter, archiveFilter, sortBy, sortOrder]);
+  }, [statusGroupFilter, archiveFilter, sortBy, sortOrder, branchFilter]);
 
   const fetchLeads = async () => {
     console.log('fetchLeads called with view:', view, 'user:', user);
@@ -302,6 +332,7 @@ export default function LeadsPage() {
       if (searchTerm) params.q = searchTerm;
       if (statusGroupFilter !== "all") params.status_group = statusGroupFilter;
       if (archiveFilter !== "active") params.archive = archiveFilter;
+      if (branchFilter) params.branch_id = branchFilter;
       params.sort_by = sortBy;
       params.order = sortOrder;
 
@@ -401,7 +432,7 @@ export default function LeadsPage() {
       fetchLeads();
     }, 300);
     return () => clearTimeout(timer);
-  }, [view, currentPage, searchTerm, statusGroupFilter, archiveFilter, sortBy, sortOrder]);
+  }, [view, currentPage, searchTerm, statusGroupFilter, archiveFilter, sortBy, sortOrder, branchFilter]);
 
   // Update URL when filters change
   useEffect(() => {
@@ -852,6 +883,24 @@ export default function LeadsPage() {
                       options={[
                         { value: "all", label: "Все лиды" },
                         { value: "my", label: "Мои лиды" },
+                      ]}
+                    />
+                  </div>
+                )}
+                {/* Branch filter - only for elevated roles */}
+                {isElevatedRole() && (
+                  <div className="w-full sm:w-48 overflow-visible">
+                    <CustomSelect
+                      value={branchFilter ? String(branchFilter) : ""}
+                      onChange={(val) => setBranchFilter(val ? Number(val) : undefined)}
+                      placeholder={branchesLoading ? "Загрузка..." : "Филиал"}
+                      disabled={branchesLoading}
+                      options={[
+                        { value: "", label: "Все филиалы" },
+                        ...availableBranches.map(branch => ({
+                          value: String(branch.id),
+                          label: branch.name
+                        }))
                       ]}
                     />
                   </div>

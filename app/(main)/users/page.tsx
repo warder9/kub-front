@@ -45,6 +45,7 @@ import { Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye } 
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import * as UserAPI from "@/src/api/users.api";
 import * as RolesAPI from "@/src/api/roles.api";
+import * as BranchesAPI from "@/src/api/branches.api";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -52,12 +53,22 @@ import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
 const EMPTY_USER: Models.CreateUserRequest = {
-  company_name: "",
-  bin_iin: "",
+  first_name: "",
+  last_name: "",
+  middle_name: "",
   email: "",
   password: "",
   phone: "",
   role_id: Roles.SALES,
+  branch_id: undefined,
+  position: "",
+  is_active: true,
+  is_verified: false,
+  // Legacy fields
+  company_name: "",
+  bin_iin: "",
+  notify_tasks_telegram: false,
+  telegram_chat_id: undefined,
 };
 
 const DetailItem = ({ label, value }: { label: string; value?: string | number | null | boolean }) => (
@@ -84,6 +95,8 @@ export default function UsersPage() {
 
   const [availableRoles, setAvailableRoles] = useState<{ id: number, name: string }[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
+  const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
 
   const { toast } = useToast();
   const currentUser = useMemo(() => getCurrentUser(), []);
@@ -147,7 +160,7 @@ export default function UsersPage() {
         // Filter out invalid roles and only keep valid ones
         const validRoles = rolesData.filter(role => {
           const roleId = Number(role.id);
-          return [10, 15, 20, 30, 40, 50].includes(roleId); // Only valid role IDs
+          return [10, 20, 30, 40, 50].includes(roleId); // Only valid role IDs
         });
         
         console.log('Filtered roles:', validRoles);
@@ -166,6 +179,22 @@ export default function UsersPage() {
     fetchRoles();
   }, []);
 
+  useEffect(() => {
+    const fetchBranches = async () => {
+      setBranchesLoading(true);
+      try {
+        const res = await BranchesAPI.listBranches();
+        const branchesData = Array.isArray(res) ? res : (res as any)?.data || [];
+        setAvailableBranches(branchesData.map((b: any) => ({ id: b.id, name: b.name })));
+      } catch (e) {
+        console.error("Failed to load branches", e);
+      } finally {
+        setBranchesLoading(false);
+      }
+    };
+    fetchBranches();
+  }, []);
+
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
 
@@ -173,8 +202,6 @@ export default function UsersPage() {
     switch (id) {
       case 10:
         return "RoleSales";
-      case 15:
-        return "RoleBackofficeStaff";
       case 20:
         return "RoleOperations";
       case 30:
@@ -218,14 +245,21 @@ export default function UsersPage() {
   const handleEditClick = (user: Models.User) => {
     setEditingUser(user);
     setUserFormData({
-      company_name: user.company_name,
-      bin_iin: user.bin_iin,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      middle_name: user.middle_name,
       email: user.email,
       phone: user.phone,
-      role_id: user.role_id,
+      role_id: user.role?.id,
+      branch_id: user.branch?.id,
+      position: user.position,
       is_verified: user.is_verified,
-      notify_tasks_telegram: user.notify_tasks_telegram,
-      telegram_chat_id: user.telegram_chat_id,
+      is_active: user.is_active,
+      // Legacy fields
+      company_name: user.company_name,
+      bin_iin: user.bin_iin,
+      notify_tasks_telegram: user.telegram?.notify_tasks,
+      telegram_chat_id: user.telegram?.chat_id,
     });
     setIsFormOpen(true);
   };
@@ -233,7 +267,7 @@ export default function UsersPage() {
   const handleViewClick = async (user: Models.User) => {
     setIsLoading(true);
     try {
-      const fullUserData = await UserAPI.getUserById(user.id);
+      const fullUserData = await UserAPI.getUserById(String(user.id));
       setViewingUser(fullUserData);
     } catch (err: any) {
       toast({
@@ -253,7 +287,7 @@ export default function UsersPage() {
   const handleDeleteConfirm = async () => {
     if (!userToDelete) return;
     try {
-      await UserAPI.deleteUser(userToDelete.id);
+      await UserAPI.deleteUser(String(userToDelete.id));
       toast({ title: "Успех", description: "Пользователь успешно удален." });
       void fetchUsersAndStats();
     } catch (err: any) {
@@ -271,12 +305,12 @@ export default function UsersPage() {
     e.preventDefault();
     try {
       if (editingUser) {
-        await UserAPI.updateUser(editingUser.id, userFormData as Models.UpdateUserRequest);
+        await UserAPI.updateUser(String(editingUser.id), userFormData as Models.UpdateUserRequest);
         toast({ title: "Успех", description: "Пользователь успешно обновлен." });
       } else {
         const payload = { ...userFormData } as Models.CreateUserRequest;
         // Auto-verify if created by Leadership or System Admin only
-        if (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) {
+        if (currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) {
           payload.is_verified = true;
         }
         await UserAPI.createUser(payload);
@@ -407,10 +441,10 @@ export default function UsersPage() {
                 ) : (
                   filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.company_name}</TableCell>
+                      <TableCell className="font-medium">{user.full_name || user.company_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phone}</TableCell>
-                      <TableCell>{getRoleLabel(user.role_id)}</TableCell>
+                      <TableCell>{getRoleLabel(user.role?.id)}</TableCell>
                       <TableCell>
                         <Badge variant={user.is_verified ? "default" : "outline"}>
                           {user.is_verified ? "Подтвержден" : "Не подтвержден"}
@@ -469,19 +503,30 @@ export default function UsersPage() {
 
       {/* Create/Edit Dialog */}
       < Dialog open={isFormOpen} onOpenChange={setIsFormOpen} >
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingUser ? "Редактировать пользователя" : "Создать пользователя"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="company_name">Название компании</Label>
-                <Input id="company_name" placeholder="Введите название компании..." value={userFormData.company_name} onChange={handleFormChange} required />
+              {/* Personal Information */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="last_name">Фамилия</Label>
+                  <Input id="last_name" placeholder="Фамилия..." value={(userFormData as any).last_name || ''} onChange={handleFormChange} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="first_name">Имя</Label>
+                  <Input id="first_name" placeholder="Имя..." value={(userFormData as any).first_name || ''} onChange={handleFormChange} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="middle_name">Отчество</Label>
+                  <Input id="middle_name" placeholder="Отчество..." value={(userFormData as any).middle_name || ''} onChange={handleFormChange} />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bin_iin">БИН/ИИН</Label>
-                <Input id="bin_iin" placeholder="Введите БИН/ИИН..." value={userFormData.bin_iin} onChange={handleFormChange} required />
+                <Label htmlFor="position">Должность</Label>
+                <Input id="position" placeholder="Должность..." value={(userFormData as any).position || ''} onChange={handleFormChange} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -510,9 +555,22 @@ export default function UsersPage() {
                   }))}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="branch_id">Филиал</Label>
+                <CustomSelect
+                  value={userFormData.branch_id ? String(userFormData.branch_id) : ""}
+                  onChange={(value) => setUserFormData(prev => ({ ...prev, branch_id: value ? Number(value) : undefined }))}
+                  placeholder={branchesLoading ? "Загрузка филиалов..." : "Выберите филиал..."}
+                  disabled={branchesLoading}
+                  options={availableBranches.map(branch => ({
+                    value: String(branch.id),
+                    label: branch.name
+                  }))}
+                />
+              </div>
 
               {/* Verification Switch: Visible for editing, or for Leadership/System Admin when creating (disabled/checked) */}
-              {(editingUser || currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) && (
+              {(editingUser || currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) && (
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="is_verified" className="cursor-pointer">Верифицирован</Label>
                   <Switch
@@ -520,9 +578,9 @@ export default function UsersPage() {
                     checked={
                       editingUser
                         ? (userFormData as Models.UpdateUserRequest).is_verified
-                        : (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN) // Auto-checked for Leadership/System Admin on creation
+                        : (currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) // Auto-checked for Leadership/System Admin on creation
                     }
-                    disabled={!editingUser && (currentUser?.role_id === Roles.MANAGEMENT || currentUser?.role_id === Roles.SYSTEM_ADMIN)} // Disabled on creation for Leadership
+                    disabled={!editingUser && (currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN)} // Disabled on creation for Leadership
                     onCheckedChange={(c) => handleSwitchChange('is_verified', c)}
                   />
                 </div>
@@ -576,13 +634,17 @@ export default function UsersPage() {
           {isLoading ? <Spinner /> : (
             <div className="grid grid-cols-2 gap-4 py-4">
               <DetailItem label="ID" value={viewingUser?.id} />
-              <DetailItem label="Роль" value={getRoleLabel(viewingUser?.role_id)} />
+              <DetailItem label="ФИО" value={viewingUser?.full_name} />
+              <DetailItem label="Роль" value={getRoleLabel(viewingUser?.role?.id)} />
               <DetailItem label="Email" value={viewingUser?.email} />
               <DetailItem label="Телефон" value={viewingUser?.phone} />
+              <DetailItem label="Должность" value={viewingUser?.position} />
+              <DetailItem label="Филиал" value={viewingUser?.branch?.name} />
               <DetailItem label="БИН/ИИН" value={viewingUser?.bin_iin} />
               <DetailItem label="Верифицирован" value={viewingUser?.is_verified ? 'Да' : 'Нет'} />
-              <DetailItem label="Уведомления в TG" value={viewingUser?.notify_tasks_telegram ? 'Да' : 'Нет'} />
-              <DetailItem label="TG Chat ID" value={viewingUser?.telegram_chat_id} />
+              <DetailItem label="Активен" value={viewingUser?.is_active ? 'Да' : 'Нет'} />
+              <DetailItem label="Уведомления в TG" value={viewingUser?.telegram?.notify_tasks ? 'Да' : 'Нет'} />
+              <DetailItem label="TG Chat ID" value={viewingUser?.telegram?.chat_id} />
               <DetailItem label="Дата создания" value={viewingUser?.created_at ? new Date(viewingUser.created_at).toLocaleString() : '-'} />
             </div>
           )}

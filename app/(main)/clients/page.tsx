@@ -446,7 +446,7 @@ export default function ClientsPage() {
     if (!user) return undefined;
     if (typeof user.role === 'string') return user.role;
     if (user.role?.code) return user.role.code;
-    if (user.role_id) {
+    if (user.role?.id) {
       const roleMap: Record<number, string> = {
         50: 'system_admin',
         40: 'leadership',
@@ -454,7 +454,7 @@ export default function ClientsPage() {
         20: 'operations',
         10: 'sales'
       };
-      return roleMap[user.role_id] || 'user';
+      return roleMap[user.role.id] || 'user';
     }
     return undefined;
   };

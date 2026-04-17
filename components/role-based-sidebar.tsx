@@ -481,6 +481,11 @@ export function RoleBasedSidebar() {
                 <p className="text-xs text-slate-500 truncate">
                   {user?.email}
                 </p>
+                {user?.branch && (
+                  <p className="text-xs text-slate-500 truncate">
+                    🏢 {user.branch.name}
+                  </p>
+                )}
                 <p className="text-xs font-semibold text-blue-600 truncate mt-0.5">
                   {displayRole}
                 </p>
